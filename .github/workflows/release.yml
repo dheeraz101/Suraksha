@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build-and-release:
-    name: Build, Sign & Package Installer
+    name: Build, Sign & Package Installer + MSIX
     runs-on: windows-latest
     steps:
       - name: Checkout Code
@@ -41,7 +41,7 @@ jobs:
             echo "has_prod_cert=true" >> $env:GITHUB_OUTPUT
           } else {
             Write-Host "No production certificate found in secrets. Creating self-signed test certificate..."
-            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Suraksha Open Source Test" -CertStoreLocation "Cert:\CurrentUser\My"
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Suraksha Open Source" -CertStoreLocation "Cert:\CurrentUser\My"
             $pwd = ConvertTo-SecureString -String "SurakshaTest123" -Force -AsPlainText
             Export-PfxCertificate -Cert $cert -FilePath "$env:TEMP\cert.pfx" -Password $pwd
             $env:CERT_PASS = "SurakshaTest123"
@@ -63,6 +63,31 @@ jobs:
           }
           Write-Host "Suraksha.exe successfully signed!"
 
+      - name: Build MSIX Package
+        shell: pwsh
+        env:
+          CERT_PASS: ${{ secrets.CERTIFICATE_PASSWORD || 'SurakshaTest123' }}
+        run: |
+          $stageDir = "$env:TEMP\SurakshaMsixStage"
+          if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path "$stageDir\Assets" | Out-Null
+          New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+
+          Copy-Item "x64\Release\Suraksha.exe" -Destination "$stageDir\Suraksha.exe" -Force
+          Copy-Item "packaging\AppxManifest.xml" -Destination "$stageDir\AppxManifest.xml" -Force
+          Copy-Item "packaging\Assets\*" -Destination "$stageDir\Assets\" -Force
+
+          $makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "makeappx.exe" -Recurse | Select-Object -First 1).FullName
+          Write-Host "Using MakeAppx at: $makeappx"
+          & "$makeappx" pack /d "$stageDir" /p "dist\Suraksha-v2.0.0-x64.msix" /o
+
+          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1).FullName
+          & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 "dist\Suraksha-v2.0.0-x64.msix"
+          if ($LASTEXITCODE -ne 0) {
+            & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 "dist\Suraksha-v2.0.0-x64.msix"
+          }
+          Write-Host "MSIX package created and signed successfully!"
+
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -78,7 +103,7 @@ jobs:
           Write-Host "Compiling installer with: $isccPath"
           & "$isccPath" "SurakshaSetup.iss"
 
-      - name: Sign Installer Setup File
+      - name: Sign Inno Setup Installer
         shell: pwsh
         env:
           CERT_PASS: ${{ secrets.CERTIFICATE_PASSWORD || 'SurakshaTest123' }}
@@ -92,9 +117,10 @@ jobs:
             Write-Warning "Timestamp server unreachable, signing without timestamp..."
             & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 "$installerPath"
           }
-          Write-Host "Installer successfully signed!"
+          Copy-Item "$installerPath" -Destination "dist\" -Force
+          Write-Host "Installer successfully signed and copied to dist/!"
 
-      - name: Clean Up Sensitive Temporary Certificates
+      - name: Clean Up Temporary Certificates
         if: always()
         shell: pwsh
         run: |
@@ -103,13 +129,10 @@ jobs:
             Write-Host "Temporary certificate removed from runner."
           }
 
-      - name: Generate Checksums
+      - name: Generate Checksums & Copy Artifacts
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path "dist"
-          Copy-Item "x64\Release\Suraksha.exe" -Destination "dist\"
-          Copy-Item "Output\*.exe" -Destination "dist\"
-          
+          Copy-Item "x64\Release\Suraksha.exe" -Destination "dist\" -Force
           Get-FileHash -Path "dist\*" -Algorithm SHA256 | Format-List | Out-File "dist\SHA256SUMS.txt"
           Get-Content "dist\SHA256SUMS.txt"
 
@@ -138,13 +161,15 @@ jobs:
             - **Hardware-bound DPAPI & Windows Hello Security**
             - **Zero Telemetry / 100% Offline Privacy Guarantee**
             
-            ### 📦 Downloads & Verification
-            - `SurakshaSetup-v2.0.0-x64.exe` (Official Windows Installer)
-            - `Suraksha.exe` (Portable Standalone Executable)
-            - See `SHA256SUMS.txt` for integrity hashes.
+            ### 📦 Available Packages
+            - **`Suraksha-v2.0.0-x64.msix`**: Modern Windows App Package (Native Windows App Installer)
+            - **`SurakshaSetup-v2.0.0-x64.exe`**: Classic Windows Setup Installer
+            - **`Suraksha.exe`**: Standalone Portable Executable
+            - Check `SHA256SUMS.txt` for integrity hashes.
           files: |
             dist/Suraksha.exe
             dist/*.exe
+            dist/*.msix
             dist/SHA256SUMS.txt
           draft: false
           prerelease: false
