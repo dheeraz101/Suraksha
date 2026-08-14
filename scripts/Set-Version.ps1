@@ -1,40 +1,38 @@
 <#
 .SYNOPSIS
-    Suraksha Version and Codename Management Script
+    Suraksha Automated Version & Build Tag Manager
 .DESCRIPTION
-    Updates application versions and codenames across all project files:
-    - Version.h (C++ header)
-    - SurakshaSetup.iss (Inno Setup Installer)
-    - packaging/AppxManifest.xml (MSIX Package Manifest)
-    - README.md & CHANGELOG.md
+    Automatically detects current version, increments version based on -beta or -release,
+    generates a timestamped build number (Time + Date + Channel [B/S] + Version),
+    and updates all project files.
 .EXAMPLE
-    .\scripts\Set-Version.ps1 -Type Release -Bump Minor -CodeName "Vajra"
+    .\scripts\Set-Version.ps1 -beta
 .EXAMPLE
-    .\scripts\Set-Version.ps1 -Type Beta -Bump Patch -CodeName "Kavach"
-.EXAMPLE
-    .\scripts\Set-Version.ps1 -Version "2.1.0" -Type Release -CodeName "Raksha"
+    .\scripts\Set-Version.ps1 -release
 #>
 
 param (
-    [ValidateSet("Release", "Beta")]
-    [string]$Type = "Release",
-
-    [string]$Version = "",
-
-    [ValidateSet("Major", "Minor", "Patch", "None")]
-    [string]$Bump = "None",
-
-    [string]$CodeName = ""
+    [switch]$beta,
+    [switch]$release,
+    [string]$Version = ""
 )
 
 Write-Host "=========================================" -ForegroundColor Cyan
-Write-Host "  Suraksha Version & Codename Manager" -ForegroundColor Cyan
+Write-Host "  Suraksha Build & Version Manager" -ForegroundColor Cyan
 Write-Host "=========================================" -ForegroundColor Cyan
 
-# 1. Read current version from Version.h
+# Determine mode (default to beta if neither specified, or pick the switch provided)
+$isBeta = $true
+if ($release) {
+    $isBeta = $false
+} elseif ($beta) {
+    $isBeta = $true
+}
+
+# 1. Read current version and status from Version.h
 $versionHPath = "Version.h"
 if (-not (Test-Path $versionHPath)) {
-    Write-Error "Version.h not found in root directory!"
+    Write-Error "Version.h not found in project root!"
     exit 1
 }
 
@@ -43,23 +41,23 @@ $versionHContent = Get-Content $versionHPath -Raw
 $major = 2
 $minor = 0
 $patch = 0
-$currentCodeName = "Kavach"
+$wasBeta = $false
 
 if ($versionHContent -match '#define\s+SURAKSHA_VERSION_MAJOR\s+(\d+)') { $major = [int]$Matches[1] }
 if ($versionHContent -match '#define\s+SURAKSHA_VERSION_MINOR\s+(\d+)') { $minor = [int]$Matches[1] }
 if ($versionHContent -match '#define\s+SURAKSHA_VERSION_PATCH\s+(\d+)') { $patch = [int]$Matches[1] }
-if ($versionHContent -match '#define\s+SURAKSHA_CODENAME\s+L"([^"]+)"') { $currentCodeName = $Matches[1] }
+if ($versionHContent -match '#define\s+SURAKSHA_IS_BETA\s+(true|false)') { $wasBeta = ($Matches[1] -eq "true") }
 
-Write-Host "Current Version: $major.$minor.$patch ($currentCodeName)" -ForegroundColor DarkGray
+Write-Host "Previous State: v$major.$minor.$patch (Beta: $wasBeta)" -ForegroundColor DarkGray
 
-# 2. Determine new version
+# 2. Compute Next Version
 if ($Version) {
     if ($Version -match '^(\d+)\.(\d+)\.(\d+)') {
         $newMajor = [int]$Matches[1]
         $newMinor = [int]$Matches[2]
         $newPatch = [int]$Matches[3]
     } else {
-        Write-Error "Invalid Version format '$Version'. Expected Semantic Version like '2.1.0'."
+        Write-Error "Invalid version format '$Version'. Expected format: 2.1.0"
         exit 1
     }
 } else {
@@ -67,26 +65,40 @@ if ($Version) {
     $newMinor = $minor
     $newPatch = $patch
 
-    switch ($Bump) {
-        "Major" { $newMajor++; $newMinor = 0; $newPatch = 0 }
-        "Minor" { $newMinor++; $newPatch = 0 }
-        "Patch" { $newPatch++ }
-        "None"  { }
+    if ($isBeta) {
+        # If transitioning to beta or advancing beta, bump patch (X.X.1 or X.1.X)
+        $newPatch++
+    } else {
+        # If releasing stable: graduate beta (or bump minor if already stable)
+        if ($wasBeta) {
+            # Graduate beta to stable version
+            $newPatch = $patch
+        } else {
+            # Next stable minor release
+            $newMinor++
+            $newPatch = 0
+        }
     }
 }
 
-$newCodeName = if ($CodeName) { $CodeName } else { $currentCodeName }
-$isBeta = ($Type -eq "Beta")
 $semVer = "$newMajor.$newMinor.$newPatch"
-$displayVersion = if ($isBeta) { "$semVer-beta ($newCodeName)" } else { "$semVer ($newCodeName)" }
+$channelChar = if ($isBeta) { "B" } else { "S" }
+$channelName = if ($isBeta) { "Beta" } else { "Stable" }
+
+# Timestamp format: Time(HHmm) + Date(ddMMyyyy)
+$timeDate = Get-Date -Format "HHmm.ddMMyyyy"
+# Build Number: Time.Date.Channel.Version (e.g. 0005.15082026.B.v2.0.1 or 0005.15082026.S.v2.1.0)
+$buildTag = "$timeDate-$channelChar-v$semVer"
+
 $rawDisplayVer = if ($isBeta) { "$semVer-beta" } else { "$semVer" }
+$displayVersion = if ($isBeta) { "$semVer-beta (Build: $buildTag)" } else { "$semVer (Build: $buildTag)" }
 $msixVersion = "$newMajor.$newMinor.$newPatch.0"
 
 Write-Host ""
-Write-Host "Applying New Version Profile:" -ForegroundColor Yellow
-Write-Host "  * Type:            $Type" -ForegroundColor White
-Write-Host "  * SemVer:          $semVer" -ForegroundColor White
-Write-Host "  * Codename:        $newCodeName" -ForegroundColor White
+Write-Host "Generated New Build Profile:" -ForegroundColor Yellow
+Write-Host "  * Channel:         $channelName ($channelChar)" -ForegroundColor White
+Write-Host "  * Semantic Ver:    $semVer" -ForegroundColor White
+Write-Host "  * Build Number:    $buildTag" -ForegroundColor White
 Write-Host "  * Display Version: $displayVersion" -ForegroundColor White
 Write-Host "  * MSIX Version:    $msixVersion" -ForegroundColor White
 Write-Host ""
@@ -97,8 +109,8 @@ $lines = @(
     "#pragma once",
     "",
     "// ═══════════════════════════════════════════════════════════════",
-    "// Suraksha Version & Codename Definition",
-    "// Automatically maintained by scripts/Set-Version.ps1",
+    "// Suraksha Version & Build Number Definition",
+    "// Automatically generated by scripts/Set-Version.ps1",
     "// ═══════════════════════════════════════════════════════════════",
     "",
     "#define SURAKSHA_VERSION_MAJOR      $newMajor",
@@ -107,13 +119,13 @@ $lines = @(
     "#define SURAKSHA_VERSION_BUILD      0",
     "",
     "#define SURAKSHA_VERSION_STRING     L`"$semVer`"",
-    "#define SURAKSHA_CODENAME           L`"$newCodeName`"",
+    "#define SURAKSHA_BUILD_TAG          L`"$buildTag`"",
     "#define SURAKSHA_IS_BETA            $isBetaLiteral",
     "",
     "#if SURAKSHA_IS_BETA",
-    "    #define SURAKSHA_DISPLAY_VERSION L`"$semVer-beta ($newCodeName)`"",
+    "    #define SURAKSHA_DISPLAY_VERSION L`"$semVer-beta [Build $buildTag]`"",
     "#else",
-    "    #define SURAKSHA_DISPLAY_VERSION L`"$semVer ($newCodeName)`"",
+    "    #define SURAKSHA_DISPLAY_VERSION L`"$semVer [Build $buildTag]`"",
     "#endif"
 )
 $lines | Out-File -FilePath "Version.h" -Encoding utf8
@@ -145,5 +157,5 @@ if (Test-Path "README.md") {
 
 Write-Host ""
 Write-Host "=========================================" -ForegroundColor Cyan
-Write-Host "  Version successfully updated to $displayVersion!" -ForegroundColor Green
+Write-Host "  Build successfully updated to $displayVersion!" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Cyan

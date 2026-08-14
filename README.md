@@ -1,4 +1,4 @@
-﻿# Suraksha - Privacy & Security (v2.0.0)
+﻿# Suraksha - Privacy & Security (v2.0.1)
 
 <p align="center">
   <img src="logo.png" width="128" alt="Suraksha Logo" />
@@ -94,6 +94,8 @@ Suraksha includes system-wide hotkeys active from anywhere in Windows:
 - **Developer**: [Dheeraz](https://dheeraz.dpdns.org/) ([GitHub](https://github.com/dheeraz101))
 - **Initiative**: An **YABP** Initiative â€” *Yet Another Boring Project* ([yabp.netlify.app](https://yabp.netlify.app/))
 - **License**: Released under the **GNU General Public License v3.0 (GPLv3)**. See [LICENSE](LICENSE) for full details.
+
+
 
 
 

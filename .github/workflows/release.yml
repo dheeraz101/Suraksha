@@ -53,13 +53,13 @@ jobs:
             $isBeta = $true
           }
 
-          # Extract version and codename from Version.h if present
+          # Extract version and build tag from Version.h
           $version = "2.0.0"
-          $codename = "Kavach"
+          $buildTag = ""
           if (Test-Path "Version.h") {
             $h = Get-Content "Version.h" -Raw
             if ($h -match '#define\s+SURAKSHA_VERSION_STRING\s+L"([^"]+)"') { $version = $Matches[1] }
-            if ($h -match '#define\s+SURAKSHA_CODENAME\s+L"([^"]+)"') { $codename = $Matches[1] }
+            if ($h -match '#define\s+SURAKSHA_BUILD_TAG\s+L"([^"]+)"') { $buildTag = $Matches[1] }
           }
 
           if ($ref -like "refs/tags/*") {
@@ -68,16 +68,17 @@ jobs:
             $tag = if ($isBeta) { "v$version-beta" } else { "v$version" }
           }
 
-          $releaseName = if ($isBeta) {
-            "Suraksha $tag [Beta] — $codename"
+          $releaseName = if ($buildTag) {
+            if ($isBeta) { "Suraksha $tag [Beta] — Build: $buildTag" } else { "Suraksha $tag [Stable] — Build: $buildTag" }
           } else {
-            "Suraksha $tag [Stable] — $codename"
+            if ($isBeta) { "Suraksha $tag [Beta]" } else { "Suraksha $tag [Stable]" }
           }
 
           echo "is_beta=$isBeta" >> $env:GITHUB_OUTPUT
           echo "tag=$tag" >> $env:GITHUB_OUTPUT
           echo "version=$version" >> $env:GITHUB_OUTPUT
-          echo "codename=$codename" >> $env:GITHUB_OUTPUT
+          echo "build_tag=$buildTag" >> $env:GITHUB_OUTPUT
+          echo "release_name=$releaseName" >> $env:GITHUB_OUTPUT
           echo "release_name=$releaseName" >> $env:GITHUB_OUTPUT
           Write-Host "Prepared Release: $releaseName (Tag: $tag, Beta: $isBeta)"
 
@@ -251,7 +252,8 @@ jobs:
             ## 🛡️ ${{ steps.meta.outputs.release_name }}
             
             ### ✨ Highlights
-            - **Codename**: `${{ steps.meta.outputs.codename }}`
+            - **Build Number**: `${{ steps.meta.outputs.build_tag }}`
+            - **Channel**: ${{ steps.meta.outputs.is_beta == 'true' && 'Beta Preview' || 'Stable Production' }}
             - **Native Windows Application Locker & Session Security**
             - **Sub-50ms Process Interception Engine**
             - **Hardware-bound DPAPI & Windows Hello Security**
