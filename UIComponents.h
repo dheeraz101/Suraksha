@@ -48,6 +48,7 @@ public:
     static void DrawStatusBadge(Graphics& graphics, int x, int y, int w, int h, const std::wstring& text, bool isActive);
     static void DrawEmptyState(Graphics& graphics, int x, int y, int w, int h, const std::wstring& title, const std::wstring& subtitle);
     static void DrawProgressBar(Graphics& graphics, int x, int y, int w, int h, int percent);
+    static void DrawVectorRadio(Graphics& graphics, int x, int y, int size, bool isSelected, Color activeColor);
 
     // Vector Icon Drawing Suite
     static void DrawAppLogo(Graphics& graphics, int x, int y, int size);

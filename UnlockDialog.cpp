@@ -334,9 +334,10 @@ bool UnlockDialog::Show(HWND hParent, const std::wstring& appName, const std::ws
     bool showPin = (settings.useCustomPin && SecurityManager::GetInstance().HasCustomPin());
 
     int dlgWidth = 420;
-    int dlgHeight = 260;
-    if (showPin) dlgHeight += 96;
+    int dlgHeight = 150;
+    if (showPin) dlgHeight += 98;
     if (settings.useWindowsAuth) dlgHeight += 48;
+    dlgHeight += 46; // Cancel button & padding
 
     int screenW = GetSystemMetrics(SM_CXSCREEN);
     int screenH = GetSystemMetrics(SM_CYSCREEN);

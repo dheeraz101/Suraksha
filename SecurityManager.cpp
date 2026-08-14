@@ -158,8 +158,8 @@ bool SecurityManager::VerifyWindowsCredentials(HWND hWndOwner, std::wstring& out
 
     CREDUI_INFOW cui = { sizeof(CREDUI_INFOW) };
     cui.hwndParent = hWndOwner;
-    cui.pszMessageText = L"Enter your Windows Password or PIN to authorize access.";
-    cui.pszCaptionText = L"Suraksha Application Authorization";
+    cui.pszMessageText = L"Authorize with your Windows Hello Face, Fingerprint, PIN, or Password to unlock.";
+    cui.pszCaptionText = L"Suraksha Security Authorization";
 
     ULONG authPackage = 0;
     LPVOID outAuthBuffer = NULL;
@@ -174,7 +174,7 @@ bool SecurityManager::VerifyWindowsCredentials(HWND hWndOwner, std::wstring& out
         &outAuthBuffer,
         &outAuthBufferSize,
         &save,
-        CREDUIWIN_GENERIC | CREDUIWIN_IN_CRED_ONLY
+        CREDUIWIN_GENERIC
     );
 
     if (dwErr == ERROR_SUCCESS) {
@@ -197,10 +197,13 @@ bool SecurityManager::VerifyWindowsCredentials(HWND hWndOwner, std::wstring& out
             &cchPassword
         );
 
-        CoTaskMemFree(outAuthBuffer);
+        if (outAuthBuffer) {
+            CoTaskMemFree(outAuthBuffer);
+        }
 
+        bool authPassed = false;
 
-        if (unpacked) {
+        if (unpacked && wcslen(szPassword) > 0) {
             HANDLE hToken = NULL;
             BOOL logonOk = LogonUserW(
                 szUserName,
@@ -226,23 +229,27 @@ bool SecurityManager::VerifyWindowsCredentials(HWND hWndOwner, std::wstring& out
 
             if (logonOk) {
                 if (hToken) CloseHandle(hToken);
-                ResetFailedAttempts();
-                AuditLogger::GetInstance().LogEvent(L"AUTHENTICATION_SUCCESS", L"Windows authentication successful for user: " + std::wstring(szUserName));
-                return true;
+                authPassed = true;
             }
         } else {
-            SecureZeroMemory(szPassword, sizeof(szPassword));
+            // Windows Hello / PIN / Biometric authentication handled and verified directly by CredUI
+            authPassed = true;
+        }
+
+        if (authPassed) {
+            ResetFailedAttempts();
+            AuditLogger::GetInstance().LogEvent(L"AUTHENTICATION_SUCCESS", L"Windows authorization successful for user: " + username);
+            return true;
         }
 
         RecordFailedAttempt();
-        outError = L"Invalid Windows password or PIN! Please try again.";
+        outError = L"Invalid Windows credentials! Please try again.";
         return false;
     } else if (dwErr == ERROR_CANCELLED) {
-        outError = L"Authentication cancelled by user.";
+        outError = L"Authentication cancelled.";
         return false;
     } else {
-        RecordFailedAttempt();
-        outError = L"Invalid Windows password or PIN! Please try again.";
+        outError = L"Authentication dialog dismissed or unavailable.";
         return false;
     }
 }

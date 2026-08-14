@@ -541,6 +541,31 @@ static std::vector<std::wstring> GetRecentAuditLogs(int maxLines = 8) {
     return lines;
 }
 
+static bool EnsureSecurityConfigured(HWND hWnd) {
+    auto& settings = ConfigManager::GetInstance().GetSettings();
+    if (!settings.useWindowsAuth && !SecurityManager::GetInstance().HasCustomPin()) {
+        int choice = MessageBoxW(hWnd,
+            L"Before protecting applications, please choose your authorization method:\n\n"
+            L"• Click YES to authorize via Windows Hello / PIN / Biometrics (Recommended)\n"
+            L"• Click NO to set a Custom Master Passcode\n"
+            L"• Click CANCEL to abort",
+            L"Suraksha - Security Setup Required",
+            MB_YESNOCANCEL | MB_ICONQUESTION);
+
+        if (choice == IDYES) {
+            settings.useWindowsAuth = true;
+            ConfigManager::GetInstance().SaveSettings();
+            AuditLogger::GetInstance().LogEvent(L"SECURITY_SETUP", L"Windows Hello / PIN configured as primary unlock method.");
+            return true;
+        } else if (choice == IDNO) {
+            PromptSetCustomPin(hWnd);
+            return SecurityManager::GetInstance().HasCustomPin();
+        }
+        return false;
+    }
+    return true;
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     // 5 Sidebar Tabs Coordinates (x: 12 to 198)
     const RECT rcTab0 = { 12, 90, 198, 126 };  // App Locker
@@ -756,6 +781,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         // Page 0 Actions
         if (g_activeTab == TAB_APPLOCKER) {
             if (PtInRectStruct(rcBtnAdd, x, y)) {
+                if (!EnsureSecurityConfigured(hWnd)) return 0;
+
                 wchar_t szFile[MAX_PATH] = { 0 };
                 OPENFILENAMEW ofn = { sizeof(ofn) };
                 ofn.hwndOwner = hWnd;
@@ -784,24 +811,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 return 0;
             }
             if (PtInRectStruct(rcPreset1, x, y)) {
+                if (!EnsureSecurityConfigured(hWnd)) return 0;
                 ConfigManager::GetInstance().AddLockedApp(L"notepad.exe");
                 UpdateTrayIconMetrics(hWnd);
                 InvalidateRect(hWnd, NULL, FALSE);
                 return 0;
             }
             if (PtInRectStruct(rcPreset2, x, y)) {
+                if (!EnsureSecurityConfigured(hWnd)) return 0;
                 ConfigManager::GetInstance().AddLockedApp(L"chrome.exe");
                 UpdateTrayIconMetrics(hWnd);
                 InvalidateRect(hWnd, NULL, FALSE);
                 return 0;
             }
             if (PtInRectStruct(rcPreset3, x, y)) {
+                if (!EnsureSecurityConfigured(hWnd)) return 0;
                 ConfigManager::GetInstance().AddLockedApp(L"cmd.exe");
                 UpdateTrayIconMetrics(hWnd);
                 InvalidateRect(hWnd, NULL, FALSE);
                 return 0;
             }
             if (PtInRectStruct(rcPreset4, x, y)) {
+                if (!EnsureSecurityConfigured(hWnd)) return 0;
                 ConfigManager::GetInstance().AddLockedApp(L"calc.exe");
                 UpdateTrayIconMetrics(hWnd);
                 InvalidateRect(hWnd, NULL, FALSE);
@@ -1186,7 +1217,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 graphics.DrawString(mainTitle.c_str(), -1, &sectionFont, titleRc, &formatLeft, &whiteBrush);
 
                 // Subtitle: Version info
-                std::wstring verLine = L"Installed: v" + std::wstring(SURAKSHA_DISPLAY_VERSION) + L" (Build: " + std::wstring(SURAKSHA_BUILD_TAG) + L")";
+                std::wstring verLine = L"Installed: Version " + std::wstring(SURAKSHA_VERSION_STRING) + L" • Build " + std::wstring(SURAKSHA_BUILD_TAG);
                 RectF verRc(322.0f, 106.0f, 470.0f, 20.0f);
                 graphics.DrawString(verLine.c_str(), -1, &bodyFont, verRc, &formatLeft, &mutedBrush);
 
@@ -1246,9 +1277,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 Color brdStab = isStableActive ? Color(255, 52, 199, 89) : Color(25, 255, 255, 255);
                 UIComponents::DrawCanvasCard(graphics, rcRadioStable.left, rcRadioStable.top, rcRadioStable.right - rcRadioStable.left, rcRadioStable.bottom - rcRadioStable.top, bgStab, brdStab, 10);
 
-                std::wstring stabRadio = isStableActive ? L"(●) Stable (Recommended)" : L"( ) Stable (Recommended)";
-                RectF stabTitleRc((REAL)(rcRadioStable.left + 14), (REAL)(rcRadioStable.top + 12), 230.0f, 20.0f);
-                graphics.DrawString(stabRadio.c_str(), -1, &sectionFont, stabTitleRc, &formatLeft, isStableActive ? &whiteBrush : &mutedBrush);
+                UIComponents::DrawVectorRadio(graphics, rcRadioStable.left + 14, rcRadioStable.top + 14, 16, isStableActive, Color(255, 52, 199, 89));
+
+                RectF stabTitleRc((REAL)(rcRadioStable.left + 38), (REAL)(rcRadioStable.top + 12), 210.0f, 20.0f);
+                graphics.DrawString(L"Stable (Recommended)", -1, &sectionFont, stabTitleRc, &formatLeft, isStableActive ? &whiteBrush : &mutedBrush);
 
                 RectF stabDescRc((REAL)(rcRadioStable.left + 14), (REAL)(rcRadioStable.top + 34), 230.0f, 32.0f);
                 graphics.DrawString(L"Official thoroughly tested releases with guaranteed stability.", -1, &bodyFont, stabDescRc, &formatLeft, &mutedBrush);
@@ -1260,9 +1292,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 Color brdBeta = isBetaActive ? Color(255, 255, 159, 10) : Color(25, 255, 255, 255);
                 UIComponents::DrawCanvasCard(graphics, rcRadioBeta.left, rcRadioBeta.top, rcRadioBeta.right - rcRadioBeta.left, rcRadioBeta.bottom - rcRadioBeta.top, bgBeta, brdBeta, 10);
 
-                std::wstring betaRadio = isBetaActive ? L"(●) Beta Channel" : L"( ) Beta Channel";
-                RectF betaTitleRc((REAL)(rcRadioBeta.left + 14), (REAL)(rcRadioBeta.top + 12), 230.0f, 20.0f);
-                graphics.DrawString(betaRadio.c_str(), -1, &sectionFont, betaTitleRc, &formatLeft, isBetaActive ? &whiteBrush : &mutedBrush);
+                UIComponents::DrawVectorRadio(graphics, rcRadioBeta.left + 14, rcRadioBeta.top + 14, 16, isBetaActive, Color(255, 255, 159, 10));
+
+                RectF betaTitleRc((REAL)(rcRadioBeta.left + 38), (REAL)(rcRadioBeta.top + 12), 210.0f, 20.0f);
+                graphics.DrawString(L"Beta Channel", -1, &sectionFont, betaTitleRc, &formatLeft, isBetaActive ? &whiteBrush : &mutedBrush);
 
                 RectF betaDescRc((REAL)(rcRadioBeta.left + 14), (REAL)(rcRadioBeta.top + 34), 230.0f, 32.0f);
                 graphics.DrawString(L"Preview early builds with newest features and rapid updates.", -1, &bodyFont, betaDescRc, &formatLeft, &mutedBrush);

@@ -227,6 +227,22 @@ void UIComponents::DrawProgressBar(Graphics& graphics, int x, int y, int w, int 
     }
 }
 
+void UIComponents::DrawVectorRadio(Graphics& graphics, int x, int y, int size, bool isSelected, Color activeColor) {
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    // Outer circle
+    Pen ringPen(isSelected ? activeColor : Color(120, 255, 255, 255), 1.5f);
+    graphics.DrawEllipse(&ringPen, x, y, size, size);
+
+    if (isSelected) {
+        // Inner filled dot
+        int dotInset = size / 4;
+        int dotSize = size - (dotInset * 2);
+        SolidBrush dotBrush(activeColor);
+        graphics.FillEllipse(&dotBrush, x + dotInset, y + dotInset, dotSize, dotSize);
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Composite UI Components
 // ═══════════════════════════════════════════════════════════════

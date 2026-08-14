@@ -299,6 +299,7 @@ bool UpdateManager::CompareVersions(const std::wstring& remoteVer, const std::ws
 
 DWORD WINAPI UpdateManager::CheckThreadProc(LPVOID lpParam) {
     UpdateManager* pThis = (UpdateManager*)lpParam;
+    DWORD startTick = GetTickCount();
 
     SYSTEMTIME st;
     GetLocalTime(&st);
@@ -306,7 +307,21 @@ DWORD WINAPI UpdateManager::CheckThreadProc(LPVOID lpParam) {
     swprintf_s(timeBuf, 64, L"Today, %02d:%02d", st.wHour, st.wMinute);
 
     std::string json;
-    if (!pThis->FetchReleasesFromGitHub(json)) {
+    bool fetchOk = pThis->FetchReleasesFromGitHub(json);
+
+    RemoteReleaseInfo remoteInfo;
+    bool parseOk = false;
+    if (fetchOk) {
+        parseOk = pThis->ParseLatestMatchingRelease(json, remoteInfo);
+    }
+
+    // Ensure a smooth, realistic checking feel of at least 2.0 seconds
+    DWORD elapsed = GetTickCount() - startTick;
+    if (elapsed < 2000) {
+        Sleep(2000 - elapsed);
+    }
+
+    if (!fetchOk) {
         pThis->m_errorMessage = L"Unable to connect to GitHub update server.";
         pThis->m_status.store(UpdateStatus::Error);
         {
@@ -317,8 +332,7 @@ DWORD WINAPI UpdateManager::CheckThreadProc(LPVOID lpParam) {
         return 0;
     }
 
-    RemoteReleaseInfo remoteInfo;
-    if (!pThis->ParseLatestMatchingRelease(json, remoteInfo)) {
+    if (!parseOk) {
         pThis->m_status.store(UpdateStatus::UpToDate);
         {
             CSLock lock(pThis->m_cs);
