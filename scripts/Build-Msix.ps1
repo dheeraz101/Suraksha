@@ -26,8 +26,11 @@ Copy-Item "x64\Release\Suraksha.exe" -Destination "$stageDir\Suraksha.exe" -Forc
 Copy-Item "packaging\AppxManifest.xml" -Destination "$stageDir\AppxManifest.xml" -Force
 Copy-Item "packaging\Assets\*" -Destination "$stageDir\Assets\" -Force
 
-# Locate makeappx.exe
-$makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "makeappx.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+# Locate makeappx.exe (explicitly x64)
+$makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64" -Filter "makeappx.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
+if (-not $makeappx) {
+    $makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "makeappx.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*\x64\makeappx.exe" } | Select-Object -Last 1).FullName
+}
 if (-not $makeappx) {
     $makeappx = (Get-Command makeappx.exe -ErrorAction SilentlyContinue).Source
 }
@@ -48,7 +51,13 @@ if ($LASTEXITCODE -ne 0) {
 
 # Sign MSIX package if certificate provided
 if ($CertPath -and (Test-Path $CertPath)) {
-    $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+    $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
+    if (-not $signtool) {
+        $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*\x64\signtool.exe" } | Select-Object -Last 1).FullName
+    }
+    if (-not $signtool) {
+        $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
+    }
     if ($signtool) {
         Write-Host "Signing MSIX package: $outputMsix" -ForegroundColor Yellow
         if ($CertPassword) {

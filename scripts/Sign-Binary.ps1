@@ -21,8 +21,14 @@ if (-not (Test-Path $FilePath)) {
     exit 1
 }
 
-# Locate signtool.exe
-$signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+# Locate signtool.exe (explicitly x64)
+$signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
+if (-not $signtool) {
+    $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*\x64\signtool.exe" } | Select-Object -Last 1).FullName
+}
+if (-not $signtool) {
+    $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
+}
 
 if (-not $signtool) {
     Write-Error "signtool.exe not found. Please install the Windows 10/11 SDK."

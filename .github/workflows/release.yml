@@ -53,7 +53,13 @@ jobs:
         env:
           CERT_PASS: ${{ secrets.CERTIFICATE_PASSWORD || 'SurakshaTest123' }}
         run: |
-          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1).FullName
+          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
+          if (-not $signtool) {
+            $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*\x64\signtool.exe" } | Select-Object -Last 1).FullName
+          }
+          if (-not $signtool) {
+            $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
+          }
           Write-Host "Using SignTool at: $signtool"
           
           & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 "x64\Release\Suraksha.exe"
@@ -77,11 +83,23 @@ jobs:
           Copy-Item "packaging\AppxManifest.xml" -Destination "$stageDir\AppxManifest.xml" -Force
           Copy-Item "packaging\Assets\*" -Destination "$stageDir\Assets\" -Force
 
-          $makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "makeappx.exe" -Recurse | Select-Object -First 1).FullName
+          $makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64" -Filter "makeappx.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
+          if (-not $makeappx) {
+            $makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "makeappx.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*\x64\makeappx.exe" } | Select-Object -Last 1).FullName
+          }
+          if (-not $makeappx) {
+            $makeappx = (Get-Command makeappx.exe -ErrorAction SilentlyContinue).Source
+          }
           Write-Host "Using MakeAppx at: $makeappx"
           & "$makeappx" pack /d "$stageDir" /p "dist\Suraksha-v2.0.0-x64.msix" /o
 
-          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1).FullName
+          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
+          if (-not $signtool) {
+            $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*\x64\signtool.exe" } | Select-Object -Last 1).FullName
+          }
+          if (-not $signtool) {
+            $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
+          }
           & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 "dist\Suraksha-v2.0.0-x64.msix"
           if ($LASTEXITCODE -ne 0) {
             & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 "dist\Suraksha-v2.0.0-x64.msix"
@@ -108,7 +126,13 @@ jobs:
         env:
           CERT_PASS: ${{ secrets.CERTIFICATE_PASSWORD || 'SurakshaTest123' }}
         run: |
-          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1).FullName
+          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
+          if (-not $signtool) {
+            $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*\x64\signtool.exe" } | Select-Object -Last 1).FullName
+          }
+          if (-not $signtool) {
+            $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
+          }
           $installerPath = Get-ChildItem -Path "Output" -Filter "*.exe" | Select-Object -First 1 -ExpandProperty FullName
           Write-Host "Signing installer: $installerPath"
 
