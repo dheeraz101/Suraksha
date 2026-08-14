@@ -1,11 +1,11 @@
-# Suraksha — Privacy & Security (v2.0)
+﻿# Suraksha - Privacy & Security (v2.0.0)
 
 <p align="center">
   <img src="logo.png" width="128" alt="Suraksha Logo" />
   <br>
   <b>A Lightweight, Native, Ultra-Fast Windows Application Locker inspired by macOS Human Interface Guidelines (HIG).</b>
   <br>
-  <i>An <b>YABP</b> Initiative — Yet Another Boring Project</i>
+  <i>An <b>YABP</b> Initiative â€” Yet Another Boring Project</i>
 </p>
 
 <p align="center">
@@ -23,21 +23,21 @@
 
 ---
 
-## 🌟 Key Features
+## ðŸŒŸ Key Features
 
-- **⚡ Sub-50ms Process Interception Engine**: Instant detection, multi-threaded window hiding (`ShowWindow(SW_HIDE)`), and process suspension (`NtSuspendProcess`) before target content is rendered.
-- **🎨 100% Direct-Canvas GDI+ UI**: Built with zero child HWND controls, physically eliminating all white corner bounding box halos, rectangular outlines, and background bleeding.
-- **🔐 Dual Authentication System**:
+- **âš¡ Sub-50ms Process Interception Engine**: Instant detection, multi-threaded window hiding (`ShowWindow(SW_HIDE)`), and process suspension (`NtSuspendProcess`) before target content is rendered.
+- **ðŸŽ¨ 100% Direct-Canvas GDI+ UI**: Built with zero child HWND controls, physically eliminating all white corner bounding box halos, rectangular outlines, and background bleeding.
+- **ðŸ” Dual Authentication System**:
   - **Windows Security (PIN / Hello / Password)** via official Microsoft CredUI (`CredUIPromptForWindowsCredentialsW`).
   - **Master Passcode Protection** with hardware-bound DPAPI hashing.
-- **🛡️ Enterprise Anti-Brute-Force Rate Limiting**: Automated 30-second security lockout after 3 consecutive failed attempts.
-- **📝 Audit Logging Engine**: Writes timestamped security logs to `%APPDATA%\Suraksha\logs\audit.log`.
-- **⌨️ Global System Hotkeys**: Quick accessibility anywhere in Windows.
-- **🚀 System Tray Integration**: Minimizes silently to system tray with dynamic metric updates.
+- **ðŸ›¡ï¸ Enterprise Anti-Brute-Force Rate Limiting**: Automated 30-second security lockout after 3 consecutive failed attempts.
+- **ðŸ“ Audit Logging Engine**: Writes timestamped security logs to `%APPDATA%\Suraksha\logs\audit.log`.
+- **âŒ¨ï¸ Global System Hotkeys**: Quick accessibility anywhere in Windows.
+- **ðŸš€ System Tray Integration**: Minimizes silently to system tray with dynamic metric updates.
 
 ---
 
-## ⌨️ Global System Hotkeys
+## âŒ¨ï¸ Global System Hotkeys
 
 Suraksha includes system-wide hotkeys active from anywhere in Windows:
 
@@ -48,7 +48,7 @@ Suraksha includes system-wide hotkeys active from anywhere in Windows:
 
 ---
 
-## 🛡️ Security Architecture & Threat Mitigation
+## ðŸ›¡ï¸ Security Architecture & Threat Mitigation
 
 | Security Layer | Technology Used | Protection Benefit |
 | :--- | :--- | :--- |
@@ -60,7 +60,7 @@ Suraksha includes system-wide hotkeys active from anywhere in Windows:
 
 ---
 
-## 💻 System Requirements & Performance
+## ðŸ’» System Requirements & Performance
 
 - **Operating System**: Windows 10 (64-bit) or Windows 11 (64-bit) (Build 19041 or newer).
 - **RAM Footprint**: **< 4 MB RAM** (24/7 background operation).
@@ -69,7 +69,7 @@ Suraksha includes system-wide hotkeys active from anywhere in Windows:
 
 ---
 
-## 🛠️ Building from Source
+## ðŸ› ï¸ Building from Source
 
 ### Prerequisites
 - **Visual Studio 2022 / 2026** with **Desktop development with C++** workload (`/std:c++20`).
@@ -89,8 +89,11 @@ Suraksha includes system-wide hotkeys active from anywhere in Windows:
 
 ---
 
-## 📜 License & Credits
+## ðŸ“œ License & Credits
 
 - **Developer**: [Dheeraz](https://dheeraz.dpdns.org/) ([GitHub](https://github.com/dheeraz101))
-- **Initiative**: An **YABP** Initiative — *Yet Another Boring Project* ([yabp.netlify.app](https://yabp.netlify.app/))
+- **Initiative**: An **YABP** Initiative â€” *Yet Another Boring Project* ([yabp.netlify.app](https://yabp.netlify.app/))
 - **License**: Released under the **GNU General Public License v3.0 (GPLv3)**. See [LICENSE](LICENSE) for full details.
+
+
+

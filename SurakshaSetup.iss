@@ -1,4 +1,4 @@
-; =====================================================================
+﻿; =====================================================================
 ; Suraksha - Windows Application Locker & Privacy System
 ; Inno Setup Script Configuration
 ; =====================================================================
@@ -63,3 +63,6 @@ Name: "{autostartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: st
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+
+
