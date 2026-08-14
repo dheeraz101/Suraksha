@@ -173,7 +173,7 @@ bool AuditLogger::ExportComplianceHTMLReport(const std::wstring& filePath) {
 
     htmlFile << L"<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Suraksha Compliance Audit Report</title>";
     htmlFile << L"<style>body{font-family:'Segoe UI',sans-serif;background:#0f172a;color:#f8fafc;padding:30px;} h1{color:#38bdf8;} table{width:100%;border-collapse:collapse;margin-top:20px;} th,td{padding:12px;text-align:left;border-bottom:1px solid #334155;} th{background:#1e293b;color:#94a3b8;} .badge{background:#0284c7;color:#fff;padding:4px 8px;border-radius:4px;font-size:12px;}</style></head><body>";
-    htmlFile << L"<h1>Suraksha Security — Compliance Audit & Integrity Report</h1>";
+    htmlFile << L"<h1>Suraksha Security - Compliance Audit & Integrity Report</h1>";
     htmlFile << L"<p>Report Generated: Cryptographically Verified HMAC Chain Intact.</p>";
     htmlFile << L"<table><tr><th>Timestamp</th><th>Category</th><th>Security Message</th><th>HMAC Checksum</th></tr>";
 

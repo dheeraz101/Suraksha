@@ -1,4 +1,4 @@
-// Suraksha.cpp : Entry point for Suraksha Windows App Locker (v2.0 4-Tab Edition)
+// Suraksha.cpp : Entry point for Suraksha Windows App Locker (v2.0 5-Tab Edition)
 #include "framework.h"
 #include "Suraksha.h"
 #include "Version.h"
@@ -9,6 +9,7 @@
 #include "TrayIcon.h"
 #include "UIComponents.h"
 #include "AuditLogger.h"
+#include "UpdateManager.h"
 
 #include <windowsx.h>
 #include <commctrl.h>
@@ -31,17 +32,19 @@ using namespace Gdiplus;
 
 #define MAX_LOADSTRING 100
 
-// Navigation Tab Constants
+// Navigation Tab Constants (5 Tabs)
 #define TAB_APPLOCKER  0
 #define TAB_SECURITY   1
-#define TAB_LOGS       2
-#define TAB_ABOUT      3
+#define TAB_UPDATES    2
+#define TAB_LOGS       3
+#define TAB_ABOUT      4
 
 // Control IDs for Direct Canvas Hit Testing
 #define ID_CANVAS_TAB_APPLOCKER    3001
 #define ID_CANVAS_TAB_SECURITY     3002
-#define ID_CANVAS_TAB_LOGS         3003
-#define ID_CANVAS_TAB_ABOUT        3004
+#define ID_CANVAS_TAB_UPDATES      3003
+#define ID_CANVAS_TAB_LOGS         3004
+#define ID_CANVAS_TAB_ABOUT        3005
 
 #define ID_CANVAS_BTN_ADD          3010
 #define ID_CANVAS_BTN_REMOVE       3011
@@ -56,10 +59,17 @@ using namespace Gdiplus;
 #define ID_CANVAS_BTN_SETPIN       3023
 #define ID_CANVAS_TOGGLE_AUTOSTART 3024
 
-#define ID_CANVAS_BTN_OPENLOG      3030
-#define ID_CANVAS_BTN_YABP         3040
-#define ID_CANVAS_BTN_DEV          3041
-#define ID_CANVAS_BTN_GITHUB       3042
+// Software Update Controls
+#define ID_CANVAS_BTN_CHECKUPDATE  3030
+#define ID_CANVAS_BTN_DOWNLOAD     3031
+#define ID_CANVAS_BTN_INSTALL      3032
+#define ID_CANVAS_RADIO_STABLE     3033
+#define ID_CANVAS_RADIO_BETA       3034
+
+#define ID_CANVAS_BTN_OPENLOG      3040
+#define ID_CANVAS_BTN_YABP         3050
+#define ID_CANVAS_BTN_DEV          3051
+#define ID_CANVAS_BTN_GITHUB       3052
 
 // Global System Hotkey IDs
 #define HOTKEY_LOCKALL   101 // Ctrl + Alt + L
@@ -215,6 +225,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
 
     // Start App Monitoring Engine
     AppLockEngine::GetInstance().StartMonitoring(hWnd);
+
+    // Initialize Software Update Manager and check for updates silently
+    UpdateManager::GetInstance().Initialize(hWnd);
+    UpdateManager::GetInstance().CheckForUpdatesAsync(false);
 
     // 1000ms periodic timer for UI sync
     SetTimer(hWnd, g_nTimerID, 1000, NULL);
@@ -528,11 +542,12 @@ static std::vector<std::wstring> GetRecentAuditLogs(int maxLines = 8) {
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-    // 4 Sidebar Tabs Coordinates (x: 12 to 198)
-    const RECT rcTab0 = { 12, 100, 198, 138 }; // App Locker
-    const RECT rcTab1 = { 12, 144, 198, 182 }; // Security & Auth
-    const RECT rcTab2 = { 12, 188, 198, 226 }; // Audit Logs
-    const RECT rcTab3 = { 12, 232, 198, 270 }; // About Suraksha
+    // 5 Sidebar Tabs Coordinates (x: 12 to 198)
+    const RECT rcTab0 = { 12, 90, 198, 126 };  // App Locker
+    const RECT rcTab1 = { 12, 132, 198, 168 }; // Security & Auth
+    const RECT rcTab2 = { 12, 174, 198, 210 }; // Software Update
+    const RECT rcTab3 = { 12, 216, 198, 252 }; // Audit Logs
+    const RECT rcTab4 = { 12, 258, 198, 294 }; // About Suraksha
 
     // Page 0: App Locker Controls
     const RECT rcBtnAdd          = { 235, 436, 430, 478 };
@@ -549,10 +564,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
     const RECT rcBtnSetPin       = { 255, 296, 600, 338 };
     const RECT rcToggleAutoStart = { 255, 356, 785, 394 };
 
-    // Page 2: Audit Logs Controls
+    // Page 2: Software Update Controls (macOS Style)
+    const RECT rcBtnCheckUpdate  = { 255, 220, 435, 262 };
+    const RECT rcBtnDownload     = { 255, 220, 445, 262 };
+    const RECT rcBtnInstall      = { 255, 220, 465, 262 };
+    const RECT rcRadioStable     = { 255, 335, 515, 410 };
+    const RECT rcRadioBeta       = { 525, 335, 785, 410 };
+
+    // Page 3: Audit Logs Controls
     const RECT rcBtnOpenLog      = { 255, 480, 520, 522 };
 
-    // Page 3: About Controls
+    // Page 4: About Controls
     const RECT rcBtnYABP         = { 255, 465, 420, 508 };
     const RECT rcBtnDev          = { 435, 465, 595, 508 };
     const RECT rcBtnGithub       = { 610, 465, 785, 508 };
@@ -603,8 +625,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         // Sidebar Tabs Hover
         if (PtInRectStruct(rcTab0, x, y)) g_hoverControlId = ID_CANVAS_TAB_APPLOCKER;
         else if (PtInRectStruct(rcTab1, x, y)) g_hoverControlId = ID_CANVAS_TAB_SECURITY;
-        else if (PtInRectStruct(rcTab2, x, y)) g_hoverControlId = ID_CANVAS_TAB_LOGS;
-        else if (PtInRectStruct(rcTab3, x, y)) g_hoverControlId = ID_CANVAS_TAB_ABOUT;
+        else if (PtInRectStruct(rcTab2, x, y)) g_hoverControlId = ID_CANVAS_TAB_UPDATES;
+        else if (PtInRectStruct(rcTab3, x, y)) g_hoverControlId = ID_CANVAS_TAB_LOGS;
+        else if (PtInRectStruct(rcTab4, x, y)) g_hoverControlId = ID_CANVAS_TAB_ABOUT;
 
         // Page 0 Hover
         else if (g_activeTab == TAB_APPLOCKER) {
@@ -636,11 +659,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             else if (PtInRectStruct(rcBtnSetPin, x, y)) g_hoverControlId = ID_CANVAS_BTN_SETPIN;
             else if (PtInRectStruct(rcToggleAutoStart, x, y)) g_hoverControlId = ID_CANVAS_TOGGLE_AUTOSTART;
         }
-        // Page 2 Hover
+        // Page 2 Hover (Software Update)
+        else if (g_activeTab == TAB_UPDATES) {
+            UpdateStatus st = UpdateManager::GetInstance().GetStatus();
+            if (st == UpdateStatus::UpdateAvailable && PtInRectStruct(rcBtnDownload, x, y)) g_hoverControlId = ID_CANVAS_BTN_DOWNLOAD;
+            else if (st == UpdateStatus::ReadyToInstall && PtInRectStruct(rcBtnInstall, x, y)) g_hoverControlId = ID_CANVAS_BTN_INSTALL;
+            else if (PtInRectStruct(rcBtnCheckUpdate, x, y)) g_hoverControlId = ID_CANVAS_BTN_CHECKUPDATE;
+            else if (PtInRectStruct(rcRadioStable, x, y)) g_hoverControlId = ID_CANVAS_RADIO_STABLE;
+            else if (PtInRectStruct(rcRadioBeta, x, y)) g_hoverControlId = ID_CANVAS_RADIO_BETA;
+        }
+        // Page 3 Hover (Audit Logs)
         else if (g_activeTab == TAB_LOGS) {
             if (PtInRectStruct(rcBtnOpenLog, x, y)) g_hoverControlId = ID_CANVAS_BTN_OPENLOG;
         }
-        // Page 3 Hover
+        // Page 4 Hover (About Links)
         else if (g_activeTab == TAB_ABOUT) {
             if (PtInRectStruct(rcBtnYABP, x, y)) g_hoverControlId = ID_CANVAS_BTN_YABP;
             else if (PtInRectStruct(rcBtnDev, x, y)) g_hoverControlId = ID_CANVAS_BTN_DEV;
@@ -683,11 +715,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             return 0;
         }
         if (PtInRectStruct(rcTab2, x, y)) {
-            g_activeTab = TAB_LOGS;
+            g_activeTab = TAB_UPDATES;
             InvalidateRect(hWnd, NULL, FALSE);
             return 0;
         }
         if (PtInRectStruct(rcTab3, x, y)) {
+            g_activeTab = TAB_LOGS;
+            InvalidateRect(hWnd, NULL, FALSE);
+            return 0;
+        }
+        if (PtInRectStruct(rcTab4, x, y)) {
             g_activeTab = TAB_ABOUT;
             InvalidateRect(hWnd, NULL, FALSE);
             return 0;
@@ -807,7 +844,33 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 return 0;
             }
         }
-        // Page 2 Actions
+        // Page 2 Actions (Software Updates)
+        else if (g_activeTab == TAB_UPDATES) {
+            UpdateStatus st = UpdateManager::GetInstance().GetStatus();
+            if (st == UpdateStatus::UpdateAvailable && PtInRectStruct(rcBtnDownload, x, y)) {
+                UpdateManager::GetInstance().StartDownloadAsync();
+                return 0;
+            }
+            if (st == UpdateStatus::ReadyToInstall && PtInRectStruct(rcBtnInstall, x, y)) {
+                UpdateManager::GetInstance().InstallAndRelaunch();
+                return 0;
+            }
+            if (PtInRectStruct(rcBtnCheckUpdate, x, y)) {
+                UpdateManager::GetInstance().CheckForUpdatesAsync(true);
+                return 0;
+            }
+            if (PtInRectStruct(rcRadioStable, x, y)) {
+                UpdateManager::GetInstance().SetChannel(L"stable");
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            if (PtInRectStruct(rcRadioBeta, x, y)) {
+                UpdateManager::GetInstance().SetChannel(L"beta");
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+        }
+        // Page 3 Actions (Audit Logs)
         else if (g_activeTab == TAB_LOGS) {
             if (PtInRectStruct(rcBtnOpenLog, x, y)) {
                 wchar_t appData[MAX_PATH] = { 0 };
@@ -818,7 +881,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 return 0;
             }
         }
-        // Page 3 Actions (About Links)
+        // Page 4 Actions (About Links)
         else if (g_activeTab == TAB_ABOUT) {
             if (PtInRectStruct(rcBtnYABP, x, y)) {
                 ShellExecuteW(NULL, L"open", L"https://yabp.netlify.app/", NULL, NULL, SW_SHOWNORMAL);
@@ -959,7 +1022,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             RectF brandRect(48.0f, 50.0f, 150.0f, 26.0f);
             graphics.DrawString(L"Suraksha", -1, &brandFont, brandRect, &formatLeft, &whiteBrush);
 
-            // 2. Draw 4 Sidebar Navigation Tabs with Native MDL2 / Fluent Icons
+            // 2. Draw 5 Sidebar Navigation Tabs with Native MDL2 / Fluent Icons
             bool hovTab0 = (g_hoverControlId == ID_CANVAS_TAB_APPLOCKER);
             UIComponents::DrawCanvasListItem(graphics, rcTab0.left, rcTab0.top, rcTab0.right - rcTab0.left, rcTab0.bottom - rcTab0.top,
                 L"App Locker", (g_activeTab == TAB_APPLOCKER), hovTab0, VectorIcon::Lock);
@@ -968,13 +1031,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             UIComponents::DrawCanvasListItem(graphics, rcTab1.left, rcTab1.top, rcTab1.right - rcTab1.left, rcTab1.bottom - rcTab1.top,
                 L"Security & Auth", (g_activeTab == TAB_SECURITY), hovTab1, VectorIcon::Shield);
 
-            bool hovTab2 = (g_hoverControlId == ID_CANVAS_TAB_LOGS);
+            bool hovTab2 = (g_hoverControlId == ID_CANVAS_TAB_UPDATES);
             UIComponents::DrawCanvasListItem(graphics, rcTab2.left, rcTab2.top, rcTab2.right - rcTab2.left, rcTab2.bottom - rcTab2.top,
-                L"Audit Logs", (g_activeTab == TAB_LOGS), hovTab2, VectorIcon::Logs);
+                L"Software Update", (g_activeTab == TAB_UPDATES), hovTab2, VectorIcon::Update);
 
-            bool hovTab3 = (g_hoverControlId == ID_CANVAS_TAB_ABOUT);
+            bool hovTab3 = (g_hoverControlId == ID_CANVAS_TAB_LOGS);
             UIComponents::DrawCanvasListItem(graphics, rcTab3.left, rcTab3.top, rcTab3.right - rcTab3.left, rcTab3.bottom - rcTab3.top,
-                L"About Suraksha", (g_activeTab == TAB_ABOUT), hovTab3, VectorIcon::Info);
+                L"Audit Logs", (g_activeTab == TAB_LOGS), hovTab3, VectorIcon::Logs);
+
+            bool hovTab4 = (g_hoverControlId == ID_CANVAS_TAB_ABOUT);
+            UIComponents::DrawCanvasListItem(graphics, rcTab4.left, rcTab4.top, rcTab4.right - rcTab4.left, rcTab4.bottom - rcTab4.top,
+                L"About Suraksha", (g_activeTab == TAB_ABOUT), hovTab4, VectorIcon::Info);
 
             // Top Status Badge
             const auto& settings = ConfigManager::GetInstance().GetSettings();
@@ -1063,7 +1130,167 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 UIComponents::DrawCanvasToggle(graphics, rcToggleAutoStart.left, rcToggleAutoStart.top, rcToggleAutoStart.right - rcToggleAutoStart.left, rcToggleAutoStart.bottom - rcToggleAutoStart.top,
                     L"Launch automatically when Windows starts", settings.autoStartWithWindows, hovT4);
             }
-            // ================= PAGE 2: AUDIT LOGS =================
+            // ================= PAGE 2: SOFTWARE UPDATE (macOS Style) =================
+            else if (g_activeTab == TAB_UPDATES) {
+                RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
+                graphics.DrawString(L"Software Update", -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
+
+                // --- Upper Hero Card: Status & Download ---
+                UIComponents::DrawCanvasCard(graphics, 235, 60, 575, 215, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
+
+                UpdateStatus status = UpdateManager::GetInstance().GetStatus();
+                const auto& relInfo = UpdateManager::GetInstance().GetAvailableRelease();
+                std::wstring channel = UpdateManager::GetInstance().GetChannel();
+                bool isBeta = (channel == L"beta");
+
+                // Large Status Emblem (52x52)
+                int emblemX = 255;
+                int emblemY = 80;
+                Color emblemBg = Color(255, 36, 36, 42);
+                VectorIcon emblemIcon = VectorIcon::Check;
+                Color iconColor = Color(255, 52, 199, 89); // Green
+
+                if (status == UpdateStatus::Checking) {
+                    emblemBg = Color(255, 20, 35, 60);
+                    emblemIcon = VectorIcon::Update;
+                    iconColor = Color(255, 10, 132, 255);
+                } else if (status == UpdateStatus::UpdateAvailable || status == UpdateStatus::Downloading) {
+                    emblemBg = Color(255, 10, 50, 95);
+                    emblemIcon = (status == UpdateStatus::Downloading) ? VectorIcon::Download : VectorIcon::Update;
+                    iconColor = Color(255, 10, 132, 255);
+                } else if (status == UpdateStatus::ReadyToInstall) {
+                    emblemBg = Color(255, 20, 55, 35);
+                    emblemIcon = VectorIcon::Check;
+                    iconColor = Color(255, 52, 199, 89);
+                } else if (status == UpdateStatus::Error) {
+                    emblemBg = Color(255, 60, 30, 20);
+                    emblemIcon = VectorIcon::Warning;
+                    iconColor = Color(255, 255, 69, 58);
+                }
+
+                UIComponents::DrawCanvasCard(graphics, emblemX, emblemY, 52, 52, emblemBg, Color(30, 255, 255, 255), 14);
+                if (emblemIcon == VectorIcon::Check) UIComponents::DrawIconCheck(graphics, emblemX + 16, emblemY + 16, 20, iconColor);
+                else if (emblemIcon == VectorIcon::Download) UIComponents::DrawIconDownload(graphics, emblemX + 16, emblemY + 16, 20, iconColor);
+                else if (emblemIcon == VectorIcon::Warning) UIComponents::DrawIconWarning(graphics, emblemX + 16, emblemY + 16, 20, iconColor);
+                else UIComponents::DrawIconUpdate(graphics, emblemX + 16, emblemY + 16, 20, iconColor);
+
+                // Headline text beside Emblem
+                std::wstring mainTitle = L"Suraksha is up to date";
+                if (status == UpdateStatus::Checking) mainTitle = L"Checking for updates...";
+                else if (status == UpdateStatus::UpdateAvailable) mainTitle = L"Suraksha v" + relInfo.version + L" is available";
+                else if (status == UpdateStatus::Downloading) mainTitle = L"Downloading Suraksha Update...";
+                else if (status == UpdateStatus::ReadyToInstall) mainTitle = L"Update Ready to Install";
+                else if (status == UpdateStatus::Error) mainTitle = L"Update Check Failed";
+
+                RectF titleRc(322.0f, 80.0f, 470.0f, 24.0f);
+                graphics.DrawString(mainTitle.c_str(), -1, &sectionFont, titleRc, &formatLeft, &whiteBrush);
+
+                // Subtitle: Version info
+                std::wstring verLine = L"Installed: v" + std::wstring(SURAKSHA_DISPLAY_VERSION) + L" (Build: " + std::wstring(SURAKSHA_BUILD_TAG) + L")";
+                RectF verRc(322.0f, 106.0f, 470.0f, 20.0f);
+                graphics.DrawString(verLine.c_str(), -1, &bodyFont, verRc, &formatLeft, &mutedBrush);
+
+                // Subtitle: Last checked
+                std::wstring lastCheckLine = L"Last checked: " + UpdateManager::GetInstance().GetLastCheckedString();
+                RectF checkRc(322.0f, 126.0f, 470.0f, 20.0f);
+                graphics.DrawString(lastCheckLine.c_str(), -1, &bodyFont, checkRc, &formatLeft, &mutedBrush);
+
+                // State-Specific Action Controls
+                if (status == UpdateStatus::Downloading) {
+                    int pct = UpdateManager::GetInstance().GetDownloadProgress();
+                    UIComponents::DrawProgressBar(graphics, 255, 170, 535, 8, pct);
+
+                    wchar_t pctBuf[128];
+                    size_t downBytes = UpdateManager::GetInstance().GetDownloadedBytes();
+                    size_t totBytes = UpdateManager::GetInstance().GetTotalBytes();
+                    if (totBytes > 0) {
+                        swprintf_s(pctBuf, 128, L"%d%% completed (%.1f MB / %.1f MB)", pct, downBytes / 1048576.0f, totBytes / 1048576.0f);
+                    } else {
+                        swprintf_s(pctBuf, 128, L"Downloading... %.1f MB", downBytes / 1048576.0f);
+                    }
+                    RectF pctRc(255.0f, 185.0f, 535.0f, 20.0f);
+                    graphics.DrawString(pctBuf, -1, &bodyFont, pctRc, &formatLeft, &mutedBrush);
+                } else if (status == UpdateStatus::UpdateAvailable) {
+                    bool hovDown = (g_hoverControlId == ID_CANVAS_BTN_DOWNLOAD);
+                    bool prsDown = (g_pressedControlId == ID_CANVAS_BTN_DOWNLOAD);
+                    std::wstring downBtnText = L"Download & Update (v" + relInfo.version + L")";
+                    UIComponents::DrawCanvasButton(graphics, rcBtnDownload.left, rcBtnDownload.top, rcBtnDownload.right - rcBtnDownload.left, rcBtnDownload.bottom - rcBtnDownload.top,
+                        downBtnText.c_str(), ButtonVariant::Primary, hovDown, prsDown, VectorIcon::Download);
+
+                    bool hovChk = (g_hoverControlId == ID_CANVAS_BTN_CHECKUPDATE);
+                    bool prsChk = (g_pressedControlId == ID_CANVAS_BTN_CHECKUPDATE);
+                    UIComponents::DrawCanvasButton(graphics, 460, 220, 160, 42,
+                        L"Check Again", ButtonVariant::Secondary, hovChk, prsChk, VectorIcon::Update);
+                } else if (status == UpdateStatus::ReadyToInstall) {
+                    bool hovInst = (g_hoverControlId == ID_CANVAS_BTN_INSTALL);
+                    bool prsInst = (g_pressedControlId == ID_CANVAS_BTN_INSTALL);
+                    UIComponents::DrawCanvasButton(graphics, rcBtnInstall.left, rcBtnInstall.top, rcBtnInstall.right - rcBtnInstall.left, rcBtnInstall.bottom - rcBtnInstall.top,
+                        L"Restart & Install Update Now", ButtonVariant::Primary, hovInst, prsInst, VectorIcon::Check);
+                } else {
+                    bool hovChk = (g_hoverControlId == ID_CANVAS_BTN_CHECKUPDATE);
+                    bool prsChk = (g_pressedControlId == ID_CANVAS_BTN_CHECKUPDATE);
+                    UIComponents::DrawCanvasButton(graphics, rcBtnCheckUpdate.left, rcBtnCheckUpdate.top, rcBtnCheckUpdate.right - rcBtnCheckUpdate.left, rcBtnCheckUpdate.bottom - rcBtnCheckUpdate.top,
+                        (status == UpdateStatus::Checking ? L"Checking..." : L"Check for Updates"), ButtonVariant::Secondary, hovChk, prsChk, VectorIcon::Update);
+                }
+
+                // --- Lower Section: Release Channel Preference ---
+                UIComponents::DrawCanvasCard(graphics, 235, 290, 575, 230, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
+
+                RectF chanHeadRc(255.0f, 305.0f, 535.0f, 22.0f);
+                graphics.DrawString(L"Update Channels", -1, &sectionFont, chanHeadRc, &formatLeft, &whiteBrush);
+
+                // Stable Channel Card
+                bool isStableActive = !isBeta;
+                bool hovStab = (g_hoverControlId == ID_CANVAS_RADIO_STABLE);
+                Color bgStab = isStableActive ? Color(255, 20, 36, 26) : (hovStab ? Color(255, 38, 38, 44) : Color(255, 30, 30, 34));
+                Color brdStab = isStableActive ? Color(255, 52, 199, 89) : Color(25, 255, 255, 255);
+                UIComponents::DrawCanvasCard(graphics, rcRadioStable.left, rcRadioStable.top, rcRadioStable.right - rcRadioStable.left, rcRadioStable.bottom - rcRadioStable.top, bgStab, brdStab, 10);
+
+                std::wstring stabRadio = isStableActive ? L"(●) Stable (Recommended)" : L"( ) Stable (Recommended)";
+                RectF stabTitleRc((REAL)(rcRadioStable.left + 14), (REAL)(rcRadioStable.top + 12), 230.0f, 20.0f);
+                graphics.DrawString(stabRadio.c_str(), -1, &sectionFont, stabTitleRc, &formatLeft, isStableActive ? &whiteBrush : &mutedBrush);
+
+                RectF stabDescRc((REAL)(rcRadioStable.left + 14), (REAL)(rcRadioStable.top + 34), 230.0f, 32.0f);
+                graphics.DrawString(L"Official thoroughly tested releases with guaranteed stability.", -1, &bodyFont, stabDescRc, &formatLeft, &mutedBrush);
+
+                // Beta Channel Card
+                bool isBetaActive = isBeta;
+                bool hovBeta = (g_hoverControlId == ID_CANVAS_RADIO_BETA);
+                Color bgBeta = isBetaActive ? Color(255, 42, 32, 16) : (hovBeta ? Color(255, 38, 38, 44) : Color(255, 30, 30, 34));
+                Color brdBeta = isBetaActive ? Color(255, 255, 159, 10) : Color(25, 255, 255, 255);
+                UIComponents::DrawCanvasCard(graphics, rcRadioBeta.left, rcRadioBeta.top, rcRadioBeta.right - rcRadioBeta.left, rcRadioBeta.bottom - rcRadioBeta.top, bgBeta, brdBeta, 10);
+
+                std::wstring betaRadio = isBetaActive ? L"(●) Beta Channel" : L"( ) Beta Channel";
+                RectF betaTitleRc((REAL)(rcRadioBeta.left + 14), (REAL)(rcRadioBeta.top + 12), 230.0f, 20.0f);
+                graphics.DrawString(betaRadio.c_str(), -1, &sectionFont, betaTitleRc, &formatLeft, isBetaActive ? &whiteBrush : &mutedBrush);
+
+                RectF betaDescRc((REAL)(rcRadioBeta.left + 14), (REAL)(rcRadioBeta.top + 34), 230.0f, 32.0f);
+                graphics.DrawString(L"Preview early builds with newest features and rapid updates.", -1, &bodyFont, betaDescRc, &formatLeft, &mutedBrush);
+
+                // Beta Warning Notice Banner
+                if (isBetaActive) {
+                    UIComponents::DrawCanvasCard(graphics, 255, 420, 535, 85, Color(255, 42, 30, 16), Color(255, 255, 159, 10), 10);
+                    UIComponents::DrawIconWarning(graphics, 270, 436, 20, Color(255, 255, 159, 10));
+
+                    RectF warnHeadRc(300.0f, 430.0f, 475.0f, 20.0f);
+                    SolidBrush amberBrush(Color(255, 255, 159, 10));
+                    graphics.DrawString(L"Beta Channel Active - Experimental Builds", -1, &sectionFont, warnHeadRc, &formatLeft, &amberBrush);
+
+                    RectF warnBodyRc(300.0f, 452.0f, 475.0f, 45.0f);
+                    graphics.DrawString(L"Beta releases receive frequent updates and experimental features, but may contain bugs or stability issues. Recommended for testing only.", -1, &bodyFont, warnBodyRc, &formatLeft, &mutedBrush);
+                } else {
+                    UIComponents::DrawCanvasCard(graphics, 255, 420, 535, 85, Color(255, 20, 32, 24), Color(255, 52, 199, 89), 10);
+                    UIComponents::DrawIconCheck(graphics, 270, 436, 20, Color(255, 52, 199, 89));
+
+                    RectF stabHeadRc(300.0f, 430.0f, 475.0f, 20.0f);
+                    SolidBrush greenBrush(Color(255, 52, 199, 89));
+                    graphics.DrawString(L"Stable Channel Active - Production Release", -1, &sectionFont, stabHeadRc, &formatLeft, &greenBrush);
+
+                    RectF stabBodyRc(300.0f, 452.0f, 475.0f, 45.0f);
+                    graphics.DrawString(L"You will only receive official, thoroughly validated updates. Recommended for all daily protection workflows.", -1, &bodyFont, stabBodyRc, &formatLeft, &mutedBrush);
+                }
+            }
+            // ================= PAGE 3: AUDIT LOGS =================
             else if (g_activeTab == TAB_LOGS) {
                 RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
                 graphics.DrawString(L"Security Audit Trails", -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
@@ -1088,7 +1315,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 UIComponents::DrawCanvasButton(graphics, rcBtnOpenLog.left, rcBtnOpenLog.top, rcBtnOpenLog.right - rcBtnOpenLog.left, rcBtnOpenLog.bottom - rcBtnOpenLog.top,
                     L"Open Complete Audit Log File", ButtonVariant::Secondary, hovOpenLog, prsOpenLog, VectorIcon::Logs);
             }
-            // ================= PAGE 3: ABOUT SURAKSHA =================
+            // ================= PAGE 4: ABOUT SURAKSHA =================
             else if (g_activeTab == TAB_ABOUT) {
                 RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
                 graphics.DrawString(L"About Suraksha", -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
@@ -1103,7 +1330,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 formatCenter.SetLineAlignment(StringAlignmentCenter);
 
                 RectF titleRc(250.0f, 142.0f, 545.0f, 26.0f);
-                std::wstring aboutTitle = L"Suraksha — v" + std::wstring(SURAKSHA_DISPLAY_VERSION);
+                std::wstring aboutTitle = L"Suraksha - v" + std::wstring(SURAKSHA_DISPLAY_VERSION);
                 graphics.DrawString(aboutTitle.c_str(), -1, &pageHeadFont, titleRc, &formatCenter, &whiteBrush);
 
                 RectF yabpRc(250.0f, 172.0f, 545.0f, 22.0f);

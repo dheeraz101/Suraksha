@@ -1,6 +1,6 @@
 # Contributing to Suraksha
 
-Thank you for your interest in contributing to **Suraksha — Privacy & Security**!
+Thank you for your interest in contributing to **Suraksha - Privacy & Security**!
 
 Suraksha is an open-source project licensed under the **GNU General Public License v3.0 (GPLv3)** and is part of **An YABP Initiative** (*Yet Another Boring Project*).
 

@@ -80,10 +80,7 @@ if (-not $CertPath -or -not (Test-Path $CertPath)) {
     $CertPath = $tempCert
 }
 
-$signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
-if (-not $signtool) {
-    $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*\x64\signtool.exe" } | Select-Object -Last 1).FullName
-}
+$signtool = (Get-ChildItem -Path "D:\Windows Kits\10\bin\*\x64\signtool.exe", "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
 if (-not $signtool) {
     $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
 }
@@ -119,10 +116,7 @@ try {
     $manifest.Save("$stageDir\AppxManifest.xml")
 } catch { }
 
-$makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64" -Filter "makeappx.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
-if (-not $makeappx) {
-    $makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "makeappx.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*\x64\makeappx.exe" } | Select-Object -Last 1).FullName
-}
+$makeappx = (Get-ChildItem -Path "D:\Windows Kits\10\bin\*\x64\makeappx.exe", "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\makeappx.exe" -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
 if (-not $makeappx) {
     $makeappx = (Get-Command makeappx.exe -ErrorAction SilentlyContinue).Source
 }

@@ -1,4 +1,4 @@
-# Security Policy — Suraksha
+# Security Policy - Suraksha
 
 ## Supported Versions
 

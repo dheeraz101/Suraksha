@@ -85,8 +85,8 @@ The automated release pipeline [`.github/workflows/release.yml`](file:///d:/Wind
 
 | Git Action | Target Channel | GitHub Release Type | Release Title |
 | :--- | :--- | :--- | :--- |
-| Push to **`beta`** branch | **Beta Preview** | Marked as **Pre-release** | `Suraksha vX.Y.Z-beta [Beta] — Build: 26B0815a` |
-| Push to **`release`** branch | **Production** | Official **Stable Release** | `Suraksha vX.Y.Z [Stable] — Build: 26S0815` |
+| Push to **`beta`** branch | **Beta Preview** | Marked as **Pre-release** | `Suraksha vX.Y.Z-beta [Beta] - Build: 26B0815a` |
+| Push to **`release`** branch | **Production** | Official **Stable Release** | `Suraksha vX.Y.Z [Stable] - Build: 26S0815` |
 | Manual Dispatch | Selected | Follows selection | Matches selection |
 
 ---

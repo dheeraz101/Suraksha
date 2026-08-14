@@ -72,6 +72,8 @@ static void ParseSettingsStream(std::wistream& stream, AppSettings& settings) {
             else if (key == L"fido2HardwareAuthEnabled") settings.fido2HardwareAuthEnabled = (val == L"1");
             else if (key == L"aesCloudSyncEnabled") settings.aesCloudSyncEnabled = (val == L"1");
             else if (key == L"remoteLockdownAlerts") settings.remoteLockdownAlerts = (val == L"1");
+            else if (key == L"updateChannel") settings.updateChannel = val.empty() ? L"stable" : val;
+            else if (key == L"autoCheckUpdates") settings.autoCheckUpdates = (val == L"1");
             else if (key == L"lockedApp") {
                 if (!val.empty()) {
                     settings.lockedApps.push_back(val);
@@ -146,6 +148,8 @@ bool ConfigManager::SaveSettings() {
     ss << L"fido2HardwareAuthEnabled=" << (m_settings.fido2HardwareAuthEnabled ? L"1" : L"0") << L"\n";
     ss << L"aesCloudSyncEnabled=" << (m_settings.aesCloudSyncEnabled ? L"1" : L"0") << L"\n";
     ss << L"remoteLockdownAlerts=" << (m_settings.remoteLockdownAlerts ? L"1" : L"0") << L"\n";
+    ss << L"updateChannel=" << m_settings.updateChannel << L"\n";
+    ss << L"autoCheckUpdates=" << (m_settings.autoCheckUpdates ? L"1" : L"0") << L"\n";
 
     for (const auto& app : m_settings.lockedApps) {
         ss << L"lockedApp=" << app << L"\n";

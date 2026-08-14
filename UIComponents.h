@@ -28,7 +28,11 @@ enum class VectorIcon {
     Calculator,
     Plus,
     Trash,
-    ExternalLink
+    ExternalLink,
+    Update,
+    Download,
+    Check,
+    Warning
 };
 
 class UIComponents {
@@ -43,6 +47,7 @@ public:
     static void DrawCloseButton(Graphics& graphics, int x, int y, int size = 13, bool isHovered = false);
     static void DrawStatusBadge(Graphics& graphics, int x, int y, int w, int h, const std::wstring& text, bool isActive);
     static void DrawEmptyState(Graphics& graphics, int x, int y, int w, int h, const std::wstring& title, const std::wstring& subtitle);
+    static void DrawProgressBar(Graphics& graphics, int x, int y, int w, int h, int percent);
 
     // Vector Icon Drawing Suite
     static void DrawAppLogo(Graphics& graphics, int x, int y, int size);
@@ -59,6 +64,10 @@ public:
     static void DrawIconPlus(Graphics& graphics, int x, int y, int size, Color color);
     static void DrawIconTrash(Graphics& graphics, int x, int y, int size, Color color);
     static void DrawIconExternalLink(Graphics& graphics, int x, int y, int size, Color color);
+    static void DrawIconUpdate(Graphics& graphics, int x, int y, int size, Color color);
+    static void DrawIconDownload(Graphics& graphics, int x, int y, int size, Color color);
+    static void DrawIconCheck(Graphics& graphics, int x, int y, int size, Color color);
+    static void DrawIconWarning(Graphics& graphics, int x, int y, int size, Color color);
 
     static GraphicsPath* CreateRoundedRectPath(int x, int y, int w, int h, int r);
 };

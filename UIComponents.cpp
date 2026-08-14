@@ -186,6 +186,47 @@ void UIComponents::DrawIconExternalLink(Graphics& graphics, int x, int y, int si
     DrawMDL2Glyph(graphics, x, y, size, color, L"\xE8A7");
 }
 
+void UIComponents::DrawIconUpdate(Graphics& graphics, int x, int y, int size, Color color) {
+    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE895"); // Sync / Refresh Arrow
+}
+
+void UIComponents::DrawIconDownload(Graphics& graphics, int x, int y, int size, Color color) {
+    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE896"); // Download Arrow
+}
+
+void UIComponents::DrawIconCheck(Graphics& graphics, int x, int y, int size, Color color) {
+    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE73E"); // Checkmark
+}
+
+void UIComponents::DrawIconWarning(Graphics& graphics, int x, int y, int size, Color color) {
+    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE7BA"); // Warning triangle
+}
+
+void UIComponents::DrawProgressBar(Graphics& graphics, int x, int y, int w, int h, int percent) {
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    int r = h / 2;
+    // Background track
+    GraphicsPath* trackPath = CreateRoundedRectPath(x, y, w, h, r);
+    SolidBrush trackBrush(Color(255, 44, 44, 48));
+    graphics.FillPath(&trackBrush, trackPath);
+    delete trackPath;
+
+    // Active fill
+    int clamped = percent < 0 ? 0 : (percent > 100 ? 100 : percent);
+    int fillW = (int)((w * clamped) / 100.0f);
+    if (fillW > 4) {
+        GraphicsPath* fillPath = CreateRoundedRectPath(x, y, fillW, h, r);
+        LinearGradientBrush fillGrad(
+            Point(x, y), Point(x + fillW, y),
+            Color(255, 10, 132, 255), // System Blue
+            Color(255, 0, 180, 255)   // Cyan glow
+        );
+        graphics.FillPath(&fillGrad, fillPath);
+        delete fillPath;
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Composite UI Components
 // ═══════════════════════════════════════════════════════════════
@@ -255,6 +296,10 @@ void UIComponents::DrawCanvasButton(Graphics& graphics, int x, int y, int w, int
         case VectorIcon::Plus:         DrawIconPlus(graphics, iconX, iconY, iconSize, textCol); break;
         case VectorIcon::Trash:        DrawIconTrash(graphics, iconX, iconY, iconSize, textCol); break;
         case VectorIcon::ExternalLink: DrawIconExternalLink(graphics, iconX, iconY, iconSize, textCol); break;
+        case VectorIcon::Update:       DrawIconUpdate(graphics, iconX, iconY, iconSize, textCol); break;
+        case VectorIcon::Download:     DrawIconDownload(graphics, iconX, iconY, iconSize, textCol); break;
+        case VectorIcon::Check:        DrawIconCheck(graphics, iconX, iconY, iconSize, textCol); break;
+        case VectorIcon::Warning:      DrawIconWarning(graphics, iconX, iconY, iconSize, textCol); break;
         default: break;
         }
     }
@@ -330,6 +375,7 @@ void UIComponents::DrawCanvasListItem(Graphics& graphics, int x, int y, int w, i
         case VectorIcon::Shield: DrawIconShield(graphics, iconX, iconY, iconSize, textCol); break;
         case VectorIcon::Logs:   DrawIconLogs(graphics, iconX, iconY, iconSize, textCol); break;
         case VectorIcon::Info:   DrawIconInfo(graphics, iconX, iconY, iconSize, textCol); break;
+        case VectorIcon::Update: DrawIconUpdate(graphics, iconX, iconY, iconSize, textCol); break;
         default: break;
         }
         textStartX = x + 38;

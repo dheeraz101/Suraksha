@@ -156,6 +156,8 @@
     <ClInclude Include="TrayIcon.h" />
     <ClInclude Include="UIComponents.h" />
     <ClInclude Include="UnlockDialog.h" />
+    <ClInclude Include="UpdateManager.h" />
+    <ClInclude Include="Version.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AppLockEngine.cpp" />
@@ -168,6 +170,7 @@
     <ClCompile Include="TrayIcon.cpp" />
     <ClCompile Include="UIComponents.cpp" />
     <ClCompile Include="UnlockDialog.cpp" />
+    <ClCompile Include="UpdateManager.cpp" />
   </ItemGroup>
 
   <ItemGroup>

@@ -69,7 +69,7 @@ jobs:
           }
 
           $releaseName = if ($buildTag) {
-            if ($isBeta) { "Suraksha $tag [Beta] — Build: $buildTag" } else { "Suraksha $tag [Stable] — Build: $buildTag" }
+            if ($isBeta) { "Suraksha $tag [Beta] - Build: $buildTag" } else { "Suraksha $tag [Stable] - Build: $buildTag" }
           } else {
             if ($isBeta) { "Suraksha $tag [Beta]" } else { "Suraksha $tag [Stable]" }
           }

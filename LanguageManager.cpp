@@ -30,7 +30,7 @@ std::wstring LanguageManager::GetString(const std::wstring& key) const {
 void LanguageManager::InitStringTables() {
     // English
     auto& en = m_tables[Language::English];
-    en[L"APP_TITLE"] = L"Suraksha — Military Security Shield";
+    en[L"APP_TITLE"] = L"Suraksha - Privacy & Security Shield";
     en[L"PROTECTED_APPS"] = L"Protected Applications";
     en[L"SECURITY_DEFENSE"] = L"Security & Defense";
     en[L"AUDIT_INSPECTOR"] = L"Audit Inspector";
@@ -42,7 +42,7 @@ void LanguageManager::InitStringTables() {
 
     // Hindi (हिंदी)
     auto& hi = m_tables[Language::Hindi];
-    hi[L"APP_TITLE"] = L"सुरक्षा — सैन्य सुरक्षा कवच";
+    hi[L"APP_TITLE"] = L"सुरक्षा - गोपनीयता और सुरक्षा कवच";
     hi[L"PROTECTED_APPS"] = L"सुरक्षित एप्लिकेशन";
     hi[L"SECURITY_DEFENSE"] = L"सुरक्षा एवं नीति";
     hi[L"AUDIT_INSPECTOR"] = L"ऑडिट निरीक्षक";
@@ -54,7 +54,7 @@ void LanguageManager::InitStringTables() {
 
     // Spanish (Español)
     auto& es = m_tables[Language::Spanish];
-    es[L"APP_TITLE"] = L"Suraksha — Escudo de Seguridad Militar";
+    es[L"APP_TITLE"] = L"Suraksha - Escudo de Seguridad";
     es[L"PROTECTED_APPS"] = L"Aplicaciones Protegidas";
     es[L"SECURITY_DEFENSE"] = L"Seguridad y Defensa";
     es[L"AUDIT_INSPECTOR"] = L"Inspector de Auditoría";
@@ -66,7 +66,7 @@ void LanguageManager::InitStringTables() {
 
     // German (Deutsch)
     auto& de = m_tables[Language::German];
-    de[L"APP_TITLE"] = L"Suraksha — Militärisches Sicherheitsschild";
+    de[L"APP_TITLE"] = L"Suraksha - Sicherheitsschild";
     de[L"PROTECTED_APPS"] = L"Geschützte Anwendungen";
     de[L"SECURITY_DEFENSE"] = L"Sicherheit & Abwehr";
     de[L"AUDIT_INSPECTOR"] = L"Audit-Inspektor";
@@ -78,7 +78,7 @@ void LanguageManager::InitStringTables() {
 
     // French (Français)
     auto& fr = m_tables[Language::French];
-    fr[L"APP_TITLE"] = L"Suraksha — Bouclier de Sécurité Militaire";
+    fr[L"APP_TITLE"] = L"Suraksha - Bouclier de Sécurité";
     fr[L"PROTECTED_APPS"] = L"Applications Protégées";
     fr[L"SECURITY_DEFENSE"] = L"Sécurité & Défense";
     fr[L"AUDIT_INSPECTOR"] = L"Inspecteur d'Audit";
@@ -90,7 +90,7 @@ void LanguageManager::InitStringTables() {
 
     // Japanese (日本語)
     auto& ja = m_tables[Language::Japanese];
-    ja[L"APP_TITLE"] = L"Suraksha — ミリタリーセキュリティシールド";
+    ja[L"APP_TITLE"] = L"Suraksha - セキュリティシールド";
     ja[L"PROTECTED_APPS"] = L"保護されたアプリケーション";
     ja[L"SECURITY_DEFENSE"] = L"セキュリティと防衛";
     ja[L"AUDIT_INSPECTOR"] = L"監査インスペクター";

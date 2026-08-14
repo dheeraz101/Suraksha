@@ -1,8 +1,8 @@
-# Terms of Use & Privacy Policy — Suraksha
+# Terms of Use & Privacy Policy - Suraksha
 
 **Effective Date**: August 14, 2026  
 **Developer**: [Dheeraz](https://dheeraz.dpdns.org/) ([GitHub](https://github.com/dheeraz101))  
-**Initiative**: An **YABP** Initiative — *Yet Another Boring Project* ([yabp.netlify.app](https://yabp.netlify.app/))  
+**Initiative**: An **YABP** Initiative - *Yet Another Boring Project* ([yabp.netlify.app](https://yabp.netlify.app/))  
 **License**: GNU General Public License v3.0 (GPLv3)
 
 ---

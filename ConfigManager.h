@@ -24,6 +24,8 @@ struct AppSettings {
     bool fido2HardwareAuthEnabled = false;
     bool aesCloudSyncEnabled = false;
     bool remoteLockdownAlerts = true;
+    std::wstring updateChannel = L"stable";
+    bool autoCheckUpdates = true;
 
     std::vector<std::wstring> lockedApps;
 

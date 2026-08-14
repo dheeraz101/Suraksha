@@ -1,11 +1,11 @@
-﻿# Suraksha - Privacy & Security (v2.0.0)
+# Suraksha - Privacy & Security (v2.0.0)
 
 <p align="center">
   <img src="logo.png" width="128" alt="Suraksha Logo" />
   <br>
-  <b>A Lightweight, Native, Ultra-Fast Windows Application Locker inspired by macOS Human Interface Guidelines (HIG).</b>
+  <b>A Lightweight, Native, Ultra-Fast Windows Application Locker inspired by Apple Human Interface Guidelines (HIG).</b>
   <br>
-  <i>An <b>YABP</b> Initiative â€” Yet Another Boring Project</i>
+  <i>An <b>YABP</b> Initiative - Yet Another Boring Project</i>
 </p>
 
 <p align="center">
@@ -23,21 +23,22 @@
 
 ---
 
-## ðŸŒŸ Key Features
+## Key Features
 
-- **âš¡ Sub-50ms Process Interception Engine**: Instant detection, multi-threaded window hiding (`ShowWindow(SW_HIDE)`), and process suspension (`NtSuspendProcess`) before target content is rendered.
-- **ðŸŽ¨ 100% Direct-Canvas GDI+ UI**: Built with zero child HWND controls, physically eliminating all white corner bounding box halos, rectangular outlines, and background bleeding.
-- **ðŸ” Dual Authentication System**:
+- **Sub-50ms Process Interception Engine**: Instant detection, multi-threaded window hiding (`ShowWindow(SW_HIDE)`), and process suspension (`NtSuspendProcess`) before target content is rendered.
+- **100% Direct-Canvas GDI+ UI**: Built with zero child HWND controls, physically eliminating all white corner bounding box halos, rectangular outlines, and background bleeding.
+- **Dual Authentication System**:
   - **Windows Security (PIN / Hello / Password)** via official Microsoft CredUI (`CredUIPromptForWindowsCredentialsW`).
   - **Master Passcode Protection** with hardware-bound DPAPI hashing.
-- **ðŸ›¡ï¸ Enterprise Anti-Brute-Force Rate Limiting**: Automated 30-second security lockout after 3 consecutive failed attempts.
-- **ðŸ“ Audit Logging Engine**: Writes timestamped security logs to `%APPDATA%\Suraksha\logs\audit.log`.
-- **âŒ¨ï¸ Global System Hotkeys**: Quick accessibility anywhere in Windows.
-- **ðŸš€ System Tray Integration**: Minimizes silently to system tray with dynamic metric updates.
+- **Integrated Software Update Center**: macOS-style in-app updates with dual channels (Stable Production and Beta Preview) and automated binary download.
+- **Enterprise Anti-Brute-Force Rate Limiting**: Automated 30-second security lockout after 3 consecutive failed attempts.
+- **Audit Logging Engine**: Writes timestamped security logs to `%APPDATA%\Suraksha\logs\audit.log`.
+- **Global System Hotkeys**: Quick accessibility anywhere in Windows.
+- **System Tray Integration**: Minimizes silently to system tray with dynamic metric updates.
 
 ---
 
-## âŒ¨ï¸ Global System Hotkeys
+## Global System Hotkeys
 
 Suraksha includes system-wide hotkeys active from anywhere in Windows:
 
@@ -48,7 +49,7 @@ Suraksha includes system-wide hotkeys active from anywhere in Windows:
 
 ---
 
-## ðŸ›¡ï¸ Security Architecture & Threat Mitigation
+## Security Architecture & Threat Mitigation
 
 | Security Layer | Technology Used | Protection Benefit |
 | :--- | :--- | :--- |
@@ -60,7 +61,7 @@ Suraksha includes system-wide hotkeys active from anywhere in Windows:
 
 ---
 
-## ðŸ’» System Requirements & Performance
+## System Requirements & Performance
 
 - **Operating System**: Windows 10 (64-bit) or Windows 11 (64-bit) (Build 19041 or newer).
 - **RAM Footprint**: **< 4 MB RAM** (24/7 background operation).
@@ -69,7 +70,7 @@ Suraksha includes system-wide hotkeys active from anywhere in Windows:
 
 ---
 
-## ðŸ› ï¸ Building from Source
+## Building from Source
 
 ### Prerequisites
 - **Visual Studio 2022 / 2026** with **Desktop development with C++** workload (`/std:c++20`).
@@ -89,18 +90,8 @@ Suraksha includes system-wide hotkeys active from anywhere in Windows:
 
 ---
 
-## ðŸ“œ License & Credits
+## License & Credits
 
 - **Developer**: [Dheeraz](https://dheeraz.dpdns.org/) ([GitHub](https://github.com/dheeraz101))
-- **Initiative**: An **YABP** Initiative â€” *Yet Another Boring Project* ([yabp.netlify.app](https://yabp.netlify.app/))
+- **Initiative**: An **YABP** Initiative - *Yet Another Boring Project* ([yabp.netlify.app](https://yabp.netlify.app/))
 - **License**: Released under the **GNU General Public License v3.0 (GPLv3)**. See [LICENSE](LICENSE) for full details.
-
-
-
-
-
-
-
-
-
-
