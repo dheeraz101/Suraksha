@@ -588,6 +588,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         int x = GET_X_LPARAM(lParam);
         int y = GET_Y_LPARAM(lParam);
 
+        TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hWnd, 0 };
+        TrackMouseEvent(&tme);
+
         int oldHover = g_hoverControlId;
         int oldHoverList = g_hoverListIdx;
         bool oldClose = g_closeHover;
@@ -611,10 +614,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             else if (PtInRectStruct(rcPreset3, x, y)) g_hoverControlId = ID_CANVAS_PRESET_CMD;
             else if (PtInRectStruct(rcPreset4, x, y)) g_hoverControlId = ID_CANVAS_PRESET_CALC;
 
-            // List Item Hover
-            if (x >= 245 && x <= 805 && y >= 110 && y <= 410) {
+            // List Item Hover (matching render origin Y = 70)
+            if (x >= 235 && x <= 810 && y >= 60 && y <= 420) {
                 const auto& lockedApps = ConfigManager::GetInstance().GetSettings().lockedApps;
-                int itemY = 110;
+                int itemY = 70;
                 for (size_t i = 0; i < lockedApps.size(); ++i) {
                     if (y >= itemY && y <= itemY + 36) {
                         g_hoverListIdx = (int)i;
@@ -646,6 +649,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         if (oldHover != g_hoverControlId || oldHoverList != g_hoverListIdx || oldClose != g_closeHover) {
             InvalidateRect(hWnd, NULL, FALSE);
         }
+        return 0;
+    }
+
+    case WM_MOUSELEAVE: {
+        g_hoverControlId = 0;
+        g_hoverListIdx = -1;
+        g_closeHover = false;
+        InvalidateRect(hWnd, NULL, FALSE);
         return 0;
     }
 
@@ -683,10 +694,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
         g_pressedControlId = g_hoverControlId;
 
-        // List Item Selection
-        if (g_activeTab == TAB_APPLOCKER && x >= 245 && x <= 805 && y >= 110 && y <= 410) {
+        // List Item Selection (matching render origin Y = 70)
+        if (g_activeTab == TAB_APPLOCKER && x >= 235 && x <= 810 && y >= 60 && y <= 420) {
             const auto& lockedApps = ConfigManager::GetInstance().GetSettings().lockedApps;
-            int itemY = 110;
+            int itemY = 70;
             for (size_t i = 0; i < lockedApps.size(); ++i) {
                 if (y >= itemY && y <= itemY + 36) {
                     g_selectedListIdx = (int)i;
@@ -841,6 +852,33 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
     case WM_TIMER: {
         if (wParam == g_nTimerID) {
             AppLockEngine::GetInstance().PeriodicCheck();
+        }
+        return 0;
+    }
+
+    case WM_COMMAND: {
+        int wmId = LOWORD(wParam);
+        switch (wmId) {
+        case ID_TRAY_OPEN:
+            ShowWindow(hWnd, SW_RESTORE);
+            SetForegroundWindow(hWnd);
+            break;
+        case ID_TRAY_TOGGLE: {
+            auto& settings = ConfigManager::GetInstance().GetSettings();
+            settings.protectionEnabled = !settings.protectionEnabled;
+            ConfigManager::GetInstance().SaveSettings();
+            UpdateTrayIconMetrics(hWnd);
+            InvalidateRect(hWnd, NULL, FALSE);
+            break;
+        }
+        case ID_TRAY_LOCKALL:
+            AppLockEngine::GetInstance().LockAllProcesses();
+            AuditLogger::GetInstance().LogEvent(L"HOTKEY_TRIGGERED", L"Tray command: All protected sessions locked.");
+            break;
+        case ID_TRAY_EXIT:
+            TrayIcon::GetInstance().Remove();
+            DestroyWindow(hWnd);
+            break;
         }
         return 0;
     }

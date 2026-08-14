@@ -63,30 +63,56 @@ GraphicsPath* UIComponents::CreateRoundedRectPath(int x, int y, int w, int h, in
 void UIComponents::DrawAppLogo(Graphics& graphics, int x, int y, int size) {
     graphics.SetSmoothingMode(SmoothingModeAntiAlias);
 
-    // Shackle arc
-    int shackleW = (int)(size * 0.52f);
-    int shackleH = (int)(size * 0.48f);
-    int shackleX = x + (size - shackleW) / 2;
-    Pen shacklePen(Color(255, 245, 245, 245), (REAL)(size * 0.12f));
-    shacklePen.SetStartCap(LineCapRound);
-    shacklePen.SetEndCap(LineCapRound);
-    graphics.DrawArc(&shacklePen, shackleX, y, shackleW, shackleH, 180, 180);
+    // Shield path with modern Apple/Fluent curvature
+    GraphicsPath shieldPath;
+    float cx = x + size / 2.0f;
+    float topY = (float)y;
+    float botY = y + size * 0.95f;
+    float leftX = (float)x + size * 0.08f;
+    float rightX = x + size * 0.92f;
+    float midY = y + size * 0.52f;
 
-    // Lock body
-    int bodyY = y + (int)(size * 0.35f);
-    int bodyW = size;
-    int bodyH = (int)(size * 0.65f);
-    DrawCanvasCard(graphics, x, bodyY, bodyW, bodyH, Color(255, 255, 255, 255), Color(255, 220, 220, 220), 5);
+    shieldPath.AddBezier(PointF(leftX, topY + size * 0.15f), PointF(leftX, topY + size * 0.04f), PointF(cx - size * 0.12f, topY), PointF(cx, topY));
+    shieldPath.AddBezier(PointF(cx, topY), PointF(cx + size * 0.12f, topY), PointF(rightX, topY + size * 0.04f), PointF(rightX, topY + size * 0.15f));
+    shieldPath.AddBezier(PointF(rightX, topY + size * 0.15f), PointF(rightX, midY), PointF(cx + size * 0.18f, botY - size * 0.12f), PointF(cx, botY));
+    shieldPath.AddBezier(PointF(cx, botY), PointF(cx - size * 0.18f, botY - size * 0.12f), PointF(leftX, midY), PointF(leftX, topY + size * 0.15f));
+    shieldPath.CloseFigure();
 
-    // Green 'S'
-    FontFamily fontFamily(L"Segoe UI");
-    Font font(&fontFamily, (REAL)(size * 0.44f), FontStyleBold, UnitPoint);
-    SolidBrush greenBrush(Color(255, 0, 200, 100));
-    StringFormat format;
-    format.SetAlignment(StringAlignmentCenter);
-    format.SetLineAlignment(StringAlignmentCenter);
-    RectF textRect((REAL)x, (REAL)bodyY, (REAL)bodyW, (REAL)bodyH);
-    graphics.DrawString(L"S", -1, &font, textRect, &format, &greenBrush);
+    // Vibrant Royal Blue to Deep Cobalt Linear Gradient
+    LinearGradientBrush shieldGrad(
+        Point(x, y), Point(x, y + size),
+        Color(255, 10, 132, 255), // System Blue
+        Color(255, 0, 75, 175)    // Deep Indigo
+    );
+    graphics.FillPath(&shieldGrad, &shieldPath);
+
+    // Neon accent outline
+    Pen borderPen(Color(180, 120, 210, 255), 1.5f);
+    graphics.DrawPath(&borderPen, &shieldPath);
+
+    // Centered White Padlock Shackle
+    int shkSize = (int)(size * 0.28f);
+    int shkX = (int)(cx - shkSize / 2.0f);
+    int shkY = (int)(y + size * 0.23f);
+    Pen shkPen(Color(255, 255, 255, 255), 2.2f);
+    shkPen.SetStartCap(LineCapRound);
+    shkPen.SetEndCap(LineCapRound);
+    graphics.DrawArc(&shkPen, shkX, shkY, shkSize, (int)(shkSize * 1.1f), 180, 180);
+
+    // Pure White Lock Body Card
+    int lockW = (int)(size * 0.40f);
+    int lockH = (int)(size * 0.32f);
+    int lockX = (int)(cx - lockW / 2.0f);
+    int lockY = (int)(y + size * 0.44f);
+    DrawCanvasCard(graphics, lockX, lockY, lockW, lockH, Color(255, 255, 255, 255), Color(30, 0, 0, 0), 4);
+
+    // Keyhole
+    SolidBrush keyHoleBrush(Color(255, 10, 132, 255));
+    graphics.FillEllipse(&keyHoleBrush, (int)(cx - 2.5f), lockY + 5, 5, 5);
+    Pen keyStemPen(Color(255, 10, 132, 255), 2.0f);
+    keyStemPen.SetStartCap(LineCapRound);
+    keyStemPen.SetEndCap(LineCapRound);
+    graphics.DrawLine(&keyStemPen, (int)cx, lockY + 8, (int)cx, lockY + 13);
 }
 
 void UIComponents::DrawCloseButton(Graphics& graphics, int x, int y, int size, bool isHovered) {

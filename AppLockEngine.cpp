@@ -89,7 +89,7 @@ DWORD WINAPI AppLockEngine::FastScannerThreadProc(LPVOID lpParam) {
     AppLockEngine* pThis = (AppLockEngine*)lpParam;
     while (pThis->m_bScanning.load()) {
         pThis->ScanForLockedProcesses();
-        Sleep(400);
+        Sleep(1000);
     }
     return 0;
 }
