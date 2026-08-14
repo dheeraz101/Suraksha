@@ -1,13 +1,24 @@
-name: Suraksha Release Pipeline (Build, Sign & Package)
+name: Suraksha Release Pipeline (Stable & Beta)
 
 on:
   push:
     branches:
       - release
       - 'release/**'
+      - beta
+      - 'beta/**'
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release Channel'
+        required: true
+        default: 'stable'
+        type: choice
+        options:
+          - stable
+          - beta
 
 permissions:
   contents: write
@@ -18,7 +29,7 @@ concurrency:
 
 jobs:
   build-and-release:
-    name: Build, Sign & Package Installer + MSIX
+    name: Build, Sign & Package (${{ github.ref_name }})
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -29,6 +40,46 @@ jobs:
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
+
+      - name: Determine Release Metadata & Channel
+        id: meta
+        shell: pwsh
+        run: |
+          $ref = $env:GITHUB_REF
+          $manualType = "${{ inputs.release_type }}"
+          
+          $isBeta = $false
+          if ($manualType -eq "beta" -or $ref -like "refs/heads/beta*" -or $ref -like "*beta*") {
+            $isBeta = $true
+          }
+
+          # Extract version and codename from Version.h if present
+          $version = "2.0.0"
+          $codename = "Kavach"
+          if (Test-Path "Version.h") {
+            $h = Get-Content "Version.h" -Raw
+            if ($h -match '#define\s+SURAKSHA_VERSION_STRING\s+L"([^"]+)"') { $version = $Matches[1] }
+            if ($h -match '#define\s+SURAKSHA_CODENAME\s+L"([^"]+)"') { $codename = $Matches[1] }
+          }
+
+          if ($ref -like "refs/tags/*") {
+            $tag = $ref -replace "refs/tags/", ""
+          } else {
+            $tag = if ($isBeta) { "v$version-beta" } else { "v$version" }
+          }
+
+          $releaseName = if ($isBeta) {
+            "Suraksha $tag [Beta] — $codename"
+          } else {
+            "Suraksha $tag [Stable] — $codename"
+          }
+
+          echo "is_beta=$isBeta" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "codename=$codename" >> $env:GITHUB_OUTPUT
+          echo "release_name=$releaseName" >> $env:GITHUB_OUTPUT
+          Write-Host "Prepared Release: $releaseName (Tag: $tag, Beta: $isBeta)"
 
       - name: Build Release Binary (x64)
         run: |
@@ -105,7 +156,9 @@ jobs:
             $makeappx = (Get-Command makeappx.exe -ErrorAction SilentlyContinue).Source
           }
           Write-Host "Using MakeAppx at: $makeappx"
-          & "$makeappx" pack /d "$stageDir" /p "dist\Suraksha-v2.0.0-x64.msix" /o
+          
+          $msixName = "dist\Suraksha-${{ steps.meta.outputs.tag }}-x64.msix"
+          & "$makeappx" pack /d "$stageDir" /p "$msixName" /o
 
           $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
           if (-not $signtool) {
@@ -114,9 +167,9 @@ jobs:
           if (-not $signtool) {
             $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source
           }
-          & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 "dist\Suraksha-v2.0.0-x64.msix"
+          & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 "$msixName"
           if ($LASTEXITCODE -ne 0) {
-            & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 "dist\Suraksha-v2.0.0-x64.msix"
+            & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 "$msixName"
           }
           Write-Host "MSIX package created and signed successfully!"
 
@@ -185,43 +238,33 @@ jobs:
       - name: Upload Build Artifacts to GitHub Actions
         uses: actions/upload-artifact@v4
         with:
-          name: Suraksha-v2.0.0-Release-Builds
+          name: Suraksha-${{ steps.meta.outputs.tag }}-Builds
           path: dist/
           retention-days: 30
-
-      - name: Determine Tag Name
-        id: tag_name
-        shell: pwsh
-        run: |
-          if ($env:GITHUB_REF -like "refs/tags/*") {
-            $tag = $env:GITHUB_REF -replace "refs/tags/", ""
-          } else {
-            $tag = "v2.0.0"
-          }
-          echo "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag_name.outputs.tag }}
-          name: "Suraksha ${{ steps.tag_name.outputs.tag }}"
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.release_name }}
           body: |
-            ## 🛡️ Suraksha Release ${{ steps.tag_name.outputs.tag }}
+            ## 🛡️ ${{ steps.meta.outputs.release_name }}
             
             ### ✨ Highlights
+            - **Codename**: `${{ steps.meta.outputs.codename }}`
             - **Native Windows Application Locker & Session Security**
             - **Sub-50ms Process Interception Engine**
             - **Hardware-bound DPAPI & Windows Hello Security**
             - **Zero Telemetry / 100% Offline Privacy Guarantee**
             
             ### 📦 Available Packages
-            - **`Suraksha-v2.0.0-x64.msix`**: Modern Windows App Package (Native Windows App Installer)
-            - **`SurakshaSetup-v2.0.0-x64.exe`**: Classic Windows Setup Installer
-            - **`Suraksha.exe`**: Standalone Portable Executable
-            - Check `SHA256SUMS.txt` for integrity hashes.
+            - **MSIX Package**: Modern Native Windows App Package
+            - **Inno Setup Installer**: Classic Windows Setup Wizard
+            - **Portable Binary**: Standalone single `.exe`
+            - Verify downloads with `SHA256SUMS.txt`.
           files: dist/*
           fail_on_unmatched_files: false
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.meta.outputs.is_beta == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

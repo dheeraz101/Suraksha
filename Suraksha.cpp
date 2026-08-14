@@ -1,6 +1,7 @@
 // Suraksha.cpp : Entry point for Suraksha Windows App Locker (v2.0 4-Tab Edition)
 #include "framework.h"
 #include "Suraksha.h"
+#include "Version.h"
 #include "Resource.h"
 #include "ConfigManager.h"
 #include "SecurityManager.h"
@@ -1102,7 +1103,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 formatCenter.SetLineAlignment(StringAlignmentCenter);
 
                 RectF titleRc(250.0f, 142.0f, 545.0f, 26.0f);
-                graphics.DrawString(L"Suraksha - Privacy & Security (v2.0)", -1, &pageHeadFont, titleRc, &formatCenter, &whiteBrush);
+                std::wstring aboutTitle = L"Suraksha — v" + std::wstring(SURAKSHA_DISPLAY_VERSION);
+                graphics.DrawString(aboutTitle.c_str(), -1, &pageHeadFont, titleRc, &formatCenter, &whiteBrush);
 
                 RectF yabpRc(250.0f, 172.0f, 545.0f, 22.0f);
                 graphics.DrawString(L"A YABP Initiative (Yet Another Boring Project)", -1, &sectionFont, yabpRc, &formatCenter, &blueBrush);
