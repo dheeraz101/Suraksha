@@ -1,0 +1,60 @@
+design:
+  version: "2.0.0"
+  system: "macOS HIG System Settings Theme"
+  colors:
+    primary: "#0A84FF"       # Apple System Blue
+    primary_hover: "#409CFF"
+    primary_pressed: "#0066CC"
+    secondary: "#2C2C2E"     # Apple Dark Gray
+    secondary_hover: "#3A3A3C"
+    secondary_pressed: "#1C1C1E"
+    success: "#34C759"       # Apple System Green
+    danger: "#FF453A"        # Apple System Red
+    warning: "#FF9F0A"       # Apple System Orange
+    background: "#141416"    # Window Slate
+    sidebar_bg: "#1A1A1E"    # Sidebar Slate
+    card_bg: "#202024"       # Grouped Card Surface
+    card_hover: "#26262B"
+    input_bg: "#2C2C2E"      # Input Card Surface
+    input_focus_border: "#0A84FF"
+    border: "rgba(255, 255, 255, 0.08)"
+    border_highlight: "rgba(255, 255, 255, 0.15)"
+    text_primary: "#F8FAFC"
+    text_secondary: "#CBD5E1"
+    text_muted: "#94A3B8"
+  spacing:
+    xs: 4
+    sm: 8
+    md: 16
+    lg: 24
+    xl: 32
+  typography:
+    font_family: "Segoe UI, Inter, SF Pro, sans-serif"
+    sizes:
+      caption: 11
+      small: 12
+      body: 14
+      header: 16
+      title: 20
+      display: 24
+    weights:
+      regular: 400
+      medium: 500
+      semibold: 600
+      bold: 700
+  radius:
+    small: 6
+    button: 10
+    card: 12
+    toggle: 12
+    modal: 14
+  clipping:
+    technique: "SetWindowRgn with CreateRoundRectRgn"
+    purpose: "Physical elimination of rectangular white corner artifacts"
+  states:
+    - default
+    - hover
+    - pressed
+    - focus
+    - selected
+    - disabled

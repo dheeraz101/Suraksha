@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Suraksha — Privacy & Security</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="mac-body">
+  <!-- macOS Window Frame -->
+  <div class="mac-window">
+    
+    <!-- Titlebar with Traffic Lights -->
+    <header class="mac-titlebar">
+      <div class="mac-traffic-lights">
+        <span class="light red"></span>
+        <span class="light yellow"></span>
+        <span class="light green"></span>
+      </div>
+      <div class="mac-title">Suraksha — Privacy & Security</div>
+      <div class="mac-status-pill" id="macStatusPill">
+        <span class="dot"></span>
+        <span id="macStatusText">Protected</span>
+      </div>
+    </header>
+
+    <!-- Main Container: Sidebar + Content -->
+    <div class="mac-main-container">
+      
+      <!-- macOS Sidebar -->
+      <aside class="mac-sidebar">
+        <div class="sidebar-section-title">SECURITY</div>
+        <nav class="sidebar-nav">
+          <button class="nav-item active" onclick="switchTab('apps')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <span>App Protection</span>
+          </button>
+          <button class="nav-item" onclick="switchTab('auth')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span>Passcode & Auth</span>
+          </button>
+          <button class="nav-item" onclick="switchTab('settings')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <span>Preferences</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <span class="user-badge" id="macWinUser">Windows Account</span>
+        </div>
+      </aside>
+
+      <!-- macOS Detail View Container -->
+      <main class="mac-content">
+        
+        <!-- Tab 1: App Protection -->
+        <div id="tab-apps" class="tab-pane active">
+          <div class="pane-header">
+            <div>
+              <h2>Protected Applications</h2>
+              <p class="pane-desc">Applications that require passcode authorization to launch</p>
+            </div>
+            <span id="appCountBadge" class="mac-badge">0 Apps</span>
+          </div>
+
+          <div class="mac-search">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input type="text" id="searchInput" placeholder="Search applications..." onkeyup="renderAppList()"/>
+          </div>
+
+          <div id="appList" class="mac-app-list custom-scroll">
+            <!-- App list rendered here -->
+          </div>
+
+          <div class="mac-quick-presets">
+            <span class="preset-label">Quick Add:</span>
+            <div class="preset-pills">
+              <button class="mac-pill" onclick="addPreset('notepad.exe')">Notepad</button>
+              <button class="mac-pill" onclick="addPreset('chrome.exe')">Chrome</button>
+              <button class="mac-pill" onclick="addPreset('cmd.exe')">Terminal</button>
+              <button class="mac-pill" onclick="addPreset('calc.exe')">Calculator</button>
+            </div>
+          </div>
+
+          <div class="mac-btn-row">
+            <button class="mac-btn mac-btn-primary" onclick="browseAddApp()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Add Application...
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 2: Passcode & Auth -->
+        <div id="tab-auth" class="tab-pane">
+          <div class="pane-header">
+            <div>
+              <h2>Passcode & Authentication</h2>
+              <p class="pane-desc">Manage authorization methods for unlocking protected apps</p>
+            </div>
+          </div>
+
+          <div class="mac-group">
+            <div class="mac-row">
+              <div class="row-info">
+                <span class="row-title">Custom Master Passcode</span>
+                <span class="row-desc">Use a custom passcode configured in Suraksha</span>
+              </div>
+              <label class="mac-switch">
+                <input type="checkbox" id="chkCustomPin" onchange="toggleSetting('useCustomPin', this.checked)"/>
+                <span class="mac-slider"></span>
+              </label>
+            </div>
+
+            <div class="mac-row action-row">
+              <div class="row-info">
+                <span class="row-title">Set Master Passcode</span>
+                <span class="row-desc">Create or update your master passcode</span>
+              </div>
+              <button class="mac-btn mac-btn-secondary" onclick="openPasscodeModal()">Set Passcode...</button>
+            </div>
+
+            <div class="mac-row">
+              <div class="row-info">
+                <span class="row-title">Windows Account Password</span>
+                <span class="row-desc">Allow unlocking using your current Windows account password</span>
+              </div>
+              <label class="mac-switch">
+                <input type="checkbox" id="chkWinAuth" onchange="toggleSetting('useWindowsAuth', this.checked)"/>
+                <span class="mac-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: System Preferences -->
+        <div id="tab-settings" class="tab-pane">
+          <div class="pane-header">
+            <div>
+              <h2>System Preferences</h2>
+              <p class="pane-desc">System integration & session protection settings</p>
+            </div>
+          </div>
+
+          <div class="mac-group">
+            <div class="mac-row">
+              <div class="row-info">
+                <span class="row-title">App Protection Engine</span>
+                <span class="row-desc">Enable background application interception</span>
+              </div>
+              <label class="mac-switch">
+                <input type="checkbox" id="chkProtection" onchange="toggleProtection(this.checked)"/>
+                <span class="mac-slider"></span>
+              </label>
+            </div>
+
+            <div class="mac-row">
+              <div class="row-info">
+                <span class="row-title">Launch at Login</span>
+                <span class="row-desc">Automatically start protection when Windows starts</span>
+              </div>
+              <label class="mac-switch">
+                <input type="checkbox" id="chkAutoStart" onchange="toggleSetting('autoStartWithWindows', this.checked)"/>
+                <span class="mac-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="mac-group danger-group">
+            <div class="mac-row action-row">
+              <div class="row-info">
+                <span class="row-title">Lock Active Sessions</span>
+                <span class="row-desc">Require passcode for all currently running applications</span>
+              </div>
+              <button class="mac-btn mac-btn-danger" onclick="lockAllSessions()">Lock All Now</button>
+            </div>
+          </div>
+        </div>
+
+      </main>
+
+    </div>
+
+  </div>
+
+  <!-- macOS Passcode Set Modal Overlay -->
+  <div id="passcodeModal" class="mac-modal-overlay">
+    <div class="mac-modal-dialog">
+      <h3>Set Master Passcode</h3>
+      <p>Enter a new passcode to secure your applications.</p>
+      
+      <input type="password" id="modalNewPin" placeholder="New Passcode" class="mac-input"/>
+      <input type="password" id="modalConfirmPin" placeholder="Confirm Passcode" class="mac-input"/>
+
+      <div id="modalError" class="modal-error"></div>
+
+      <div class="modal-actions">
+        <button class="mac-btn mac-btn-secondary" onclick="closePasscodeModal()">Cancel</button>
+        <button class="mac-btn mac-btn-primary" onclick="saveNewPasscode()">Save Passcode</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

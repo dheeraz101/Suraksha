@@ -1,0 +1,76 @@
+# =========================================================================
+# Suraksha — Official GitHub .gitignore
+# Complete exclusion list for Visual Studio C++, MSBuild, OS junk, & sensitive data
+# =========================================================================
+
+# --- Sensitive User Data & Local App State ---
+settings.json
+*.log
+audit.log
+
+# --- Security Certificates & Signing Keys ---
+*.pfx
+*.cer
+*.crt
+*.p12
+*.pem
+*.snk
+*.key
+
+# --- Build Outputs & Binaries ---
+[Xx]64/
+[Xx]86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+Debug/
+Release/
+[Bb]uild/
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+*.exe
+*.dll
+*.lib
+*.so
+*.dylib
+*.exp
+
+# --- Visual Studio Intermediate & Debug Symbol Files ---
+*.pdb
+*.idb
+*.ilk
+*.iobj
+*.ipdb
+*.pch
+*.obj
+*.tlog
+*.res
+*.build.appxrecipe
+
+# --- Visual Studio User-Specific IDE Files & Database Caches ---
+.vs/
+*.suo
+*.user
+*.userosv
+*.sln.docstates
+*.VC.db
+*.VC.opendb
+*.sdf
+*.opensdf
+*.ncb
+*.aps
+*.cache
+
+# --- OS System Files & Temporary Junk ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.tmp
+*.temp
+~$*
+
+# --- macOS System Files ---
+.DS_Store
+.AppleDouble
+.LSSharedFileList

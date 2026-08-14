@@ -1,0 +1,6 @@
+architecture:
+  type: "win32_native_app"
+  language: "cpp20"
+  ui_framework: "gdiplus_anti_aliased_vector"
+  security_auth: "windows_credui_dpapi_sha256"
+  interception_engine: "wineventhook_ntsuspend"

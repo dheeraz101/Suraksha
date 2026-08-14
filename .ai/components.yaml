@@ -1,0 +1,54 @@
+components:
+  NavigationSidebar:
+    width: 220
+    bg_color: "#1A1A1E"
+    item_height: 36
+    item_radius: 8
+    items:
+      - id: overview
+        label: "Overview"
+      - id: protected_apps
+        label: "Protected Apps"
+      - id: security
+        label: "Security Options"
+      - id: preferences
+        label: "Preferences"
+  SearchBox:
+    height: 32
+    radius: 8
+    bg_color: "#2C2C2E"
+    placeholder: "Search protected apps..."
+  Button:
+    variants:
+      primary:
+        bg: "#0A84FF"
+        text: "#FFFFFF"
+      secondary:
+        bg: "#2C2C2E"
+        text: "#F8FAFC"
+      danger:
+        bg: "#FF453A"
+        text: "#FFFFFF"
+      ghost:
+        bg: "transparent"
+        text: "#0A84FF"
+    height: 38
+    radius: 10
+  ToggleSwitch:
+    width: 44
+    height: 24
+    radius: 12
+    knob_size: 20
+    active_color: "#34C759"
+    inactive_color: "#3A3A3C"
+  CardContainer:
+    padding: 20
+    radius: 12
+    bg_color: "#202024"
+    border_color: "rgba(255, 255, 255, 0.08)"
+  PasscodeModal:
+    type: "frameless_sheet"
+    width: 360
+    height: 260
+    radius: 14
+    bg_color: "#1C1C1E"
