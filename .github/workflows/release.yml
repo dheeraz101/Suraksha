@@ -83,6 +83,14 @@ jobs:
           Copy-Item "packaging\AppxManifest.xml" -Destination "$stageDir\AppxManifest.xml" -Force
           Copy-Item "packaging\Assets\*" -Destination "$stageDir\Assets\" -Force
 
+          # Extract certificate subject to ensure 100% exact publisher match in manifest
+          $certObj = Get-PfxCertificate -FilePath "$env:TEMP\cert.pfx"
+          $publisher = $certObj.Subject
+          Write-Host "Syncing AppxManifest Publisher Identity to match certificate: $publisher"
+          [xml]$manifest = Get-Content "$stageDir\AppxManifest.xml"
+          $manifest.Package.Identity.Publisher = $publisher
+          $manifest.Save("$stageDir\AppxManifest.xml")
+
           $makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64" -Filter "makeappx.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
           if (-not $makeappx) {
             $makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "makeappx.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*\x64\makeappx.exe" } | Select-Object -Last 1).FullName

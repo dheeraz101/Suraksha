@@ -26,6 +26,20 @@ Copy-Item "x64\Release\Suraksha.exe" -Destination "$stageDir\Suraksha.exe" -Forc
 Copy-Item "packaging\AppxManifest.xml" -Destination "$stageDir\AppxManifest.xml" -Force
 Copy-Item "packaging\Assets\*" -Destination "$stageDir\Assets\" -Force
 
+# If certificate is present, sync Publisher in manifest to match certificate Subject exactly
+if ($CertPath -and (Test-Path $CertPath)) {
+    try {
+        $certObj = Get-PfxCertificate -FilePath $CertPath
+        $publisher = $certObj.Subject
+        Write-Host "Syncing AppxManifest Publisher to match certificate: $publisher" -ForegroundColor Yellow
+        [xml]$manifest = Get-Content "$stageDir\AppxManifest.xml"
+        $manifest.Package.Identity.Publisher = $publisher
+        $manifest.Save("$stageDir\AppxManifest.xml")
+    } catch {
+        Write-Warning "Could not extract certificate subject from $CertPath"
+    }
+}
+
 # Locate makeappx.exe (explicitly x64)
 $makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64" -Filter "makeappx.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -Last 1).FullName
 if (-not $makeappx) {
