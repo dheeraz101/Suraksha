@@ -26,10 +26,10 @@ Copy-Item "x64\Release\Suraksha.exe" -Destination "$stageDir\Suraksha.exe" -Forc
 Copy-Item "packaging\AppxManifest.xml" -Destination "$stageDir\AppxManifest.xml" -Force
 Copy-Item "packaging\Assets\*" -Destination "$stageDir\Assets\" -Force
 
-# If certificate is present, sync Publisher in manifest to match certificate Subject exactly
+# If certificate is present, sync Publisher in manifest to match certificate Subject exactly (non-interactively)
 if ($CertPath -and (Test-Path $CertPath)) {
     try {
-        $certObj = Get-PfxCertificate -FilePath $CertPath
+        $certObj = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($CertPath, $CertPassword)
         $publisher = $certObj.Subject
         Write-Host "Syncing AppxManifest Publisher to match certificate: $publisher" -ForegroundColor Yellow
         [xml]$manifest = Get-Content "$stageDir\AppxManifest.xml"
