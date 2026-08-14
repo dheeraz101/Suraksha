@@ -18,6 +18,11 @@
 
 ---
 
+> [!NOTE]
+> **Initial Stage & Beta Testing Notice**: Suraksha is currently under its initial development stage and active beta testing. It may contain bugs, edge-case quirks, or unhandled system behaviors. If you discover any issues, please report them on the [GitHub Issues](https://github.com/dheeraz101/Suraksha/issues) page.
+
+---
+
 ## 🌟 Key Features
 
 - **⚡ Sub-50ms Process Interception Engine**: Instant detection, multi-threaded window hiding (`ShowWindow(SW_HIDE)`), and process suspension (`NtSuspendProcess`) before target content is rendered.
