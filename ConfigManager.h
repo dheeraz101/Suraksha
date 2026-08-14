@@ -26,6 +26,7 @@ struct AppSettings {
     bool remoteLockdownAlerts = true;
     std::wstring updateChannel = L"stable";
     bool autoCheckUpdates = true;
+    int language = 0; // 0: English, 1: Hindi, 2: Spanish, 3: German, 4: French, 5: Japanese
 
     std::vector<std::wstring> lockedApps;
 

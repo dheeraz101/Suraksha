@@ -10,6 +10,7 @@
 #include "UIComponents.h"
 #include "AuditLogger.h"
 #include "UpdateManager.h"
+#include "LanguageManager.h"
 
 #include <windowsx.h>
 #include <commctrl.h>
@@ -59,6 +60,17 @@ using namespace Gdiplus;
 #define ID_CANVAS_BTN_SETPIN       3023
 #define ID_CANVAS_TOGGLE_AUTOSTART 3024
 
+// Scheduled Protection Controls
+#define ID_CANVAS_TOGGLE_SCHEDULE  3060
+#define ID_CANVAS_BTN_SCHED_S_DEC  3061
+#define ID_CANVAS_BTN_SCHED_S_INC  3062
+#define ID_CANVAS_BTN_SCHED_E_DEC  3063
+#define ID_CANVAS_BTN_SCHED_E_INC  3064
+
+// Enterprise Policy Controls
+#define ID_CANVAS_BTN_EXPORT_POL   3070
+#define ID_CANVAS_BTN_IMPORT_POL   3071
+
 // Software Update Controls
 #define ID_CANVAS_BTN_CHECKUPDATE  3030
 #define ID_CANVAS_BTN_DOWNLOAD     3031
@@ -67,6 +79,15 @@ using namespace Gdiplus;
 #define ID_CANVAS_RADIO_BETA       3034
 
 #define ID_CANVAS_BTN_OPENLOG      3040
+
+// Language Selector Controls (Tab 4)
+#define ID_CANVAS_LANG_EN          3080
+#define ID_CANVAS_LANG_HI          3081
+#define ID_CANVAS_LANG_ES          3082
+#define ID_CANVAS_LANG_DE          3083
+#define ID_CANVAS_LANG_FR          3084
+#define ID_CANVAS_LANG_JA          3085
+
 #define ID_CANVAS_BTN_YABP         3050
 #define ID_CANVAS_BTN_DEV          3051
 #define ID_CANVAS_BTN_GITHUB       3052
@@ -222,6 +243,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
     if (!hIcon) hIcon = LoadIcon(NULL, IDI_SHIELD);
     TrayIcon::GetInstance().Create(hWnd, 1, hIcon, L"Suraksha - Privacy & Security");
     UpdateTrayIconMetrics(hWnd);
+
+    // Initialize UI Localization
+    int currentLang = ConfigManager::GetInstance().GetSettings().language;
+    if (currentLang >= 0 && currentLang <= 5) {
+        LanguageManager::GetInstance().SetLanguage((Language)currentLang);
+    }
 
     // Start App Monitoring Engine
     AppLockEngine::GetInstance().StartMonitoring(hWnd);
@@ -515,6 +542,195 @@ void PromptSetCustomPin(HWND hWndParent) {
     }
 }
 
+// Helper: Format hour integer into 12-hour AM/PM string
+static std::wstring FormatHour(int hour) {
+    int h = hour % 24;
+    bool pm = (h >= 12);
+    int dispH = h % 12;
+    if (dispH == 0) dispH = 12;
+    wchar_t buf[32];
+    swprintf_s(buf, 32, L"%02d:00 %s", dispH, pm ? L"PM" : L"AM");
+    return buf;
+}
+
+// Enterprise Policy Passkey Dialog
+static std::wstring s_policyPasskey = L"";
+static bool s_policyPassAccepted = false;
+static std::wstring s_policyPromptTitle = L"Policy Encryption Key";
+
+static LRESULT CALLBACK PolicyPassDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    static std::wstring enteredPass = L"";
+    switch (uMsg) {
+    case WM_CREATE:
+        enteredPass = L"";
+        s_policyPassAccepted = false;
+        SetFocus(hWnd);
+        return 0;
+    case WM_CHAR: {
+        wchar_t ch = (wchar_t)wParam;
+        if (ch == VK_BACK) {
+            if (!enteredPass.empty()) { enteredPass.pop_back(); InvalidateRect(hWnd, NULL, FALSE); }
+        } else if (ch == VK_RETURN) {
+            if (!enteredPass.empty()) {
+                s_policyPasskey = enteredPass;
+                s_policyPassAccepted = true;
+                DestroyWindow(hWnd);
+            }
+        } else if (ch == VK_ESCAPE) {
+            s_policyPassAccepted = false;
+            DestroyWindow(hWnd);
+        } else if (ch >= 32 && ch < 127) {
+            if (enteredPass.length() < 64) {
+                enteredPass.push_back(ch);
+                InvalidateRect(hWnd, NULL, FALSE);
+            }
+        }
+        return 0;
+    }
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hWnd, &ps);
+        RECT rect; GetClientRect(hWnd, &rect);
+        int w = rect.right - rect.left, h = rect.bottom - rect.top;
+        HDC memDC = CreateCompatibleDC(hdc);
+        HBITMAP hMemBmp = CreateCompatibleBitmap(hdc, w, h);
+        HBITMAP hOldBmp = (HBITMAP)SelectObject(memDC, hMemBmp);
+
+        HBRUSH hBg = CreateSolidBrush(RGB(20, 20, 23));
+        FillRect(memDC, &rect, hBg);
+        DeleteObject(hBg);
+
+        {
+            Graphics graphics(memDC);
+            graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+            graphics.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
+
+            Pen borderPen(Color(30, 255, 255, 255), 1.0f);
+            graphics.DrawRectangle(&borderPen, 0, 0, w - 1, h - 1);
+
+            FontFamily fontFamDisplay(L"Segoe UI Variable Display");
+            FontFamily fontFamText(L"Segoe UI Variable Text");
+            FontFamily fontFamFallback(L"Segoe UI");
+            const FontFamily* pDisplayFam = fontFamDisplay.IsAvailable() ? &fontFamDisplay : &fontFamFallback;
+            const FontFamily* pTextFam = fontFamText.IsAvailable() ? &fontFamText : &fontFamFallback;
+
+            Font fontTitle(pDisplayFam, 12.0f, FontStyleBold, UnitPoint);
+            Font fontSub(pTextFam, 9.0f, FontStyleRegular, UnitPoint);
+            SolidBrush whiteBrush(Color(255, 248, 250, 252));
+            SolidBrush mutedBrush(Color(255, 148, 163, 184));
+
+            StringFormat formatCenter;
+            formatCenter.SetAlignment(StringAlignmentCenter);
+            formatCenter.SetLineAlignment(StringAlignmentCenter);
+
+            RectF rcTitle(20.0f, 20.0f, (REAL)(w - 40), 22.0f);
+            graphics.DrawString(s_policyPromptTitle.c_str(), -1, &fontTitle, rcTitle, &formatCenter, &whiteBrush);
+
+            RectF rcSub(20.0f, 44.0f, (REAL)(w - 40), 20.0f);
+            graphics.DrawString(L"Enter AES-256 Encryption Passphrase:", -1, &fontSub, rcSub, &formatCenter, &mutedBrush);
+
+            // Input card
+            UIComponents::DrawCanvasCard(graphics, 30, 75, w - 60, 42, Color(255, 36, 36, 40), Color(255, 10, 132, 255), 10);
+            UIComponents::DrawIconKey(graphics, 42, 88, 16, Color(255, 148, 163, 184));
+
+            std::wstring masked = L"";
+            for (size_t i = 0; i < enteredPass.length(); ++i) masked += L"*  ";
+
+            if (masked.empty()) {
+                RectF rcCue(66.0f, 75.0f, (REAL)(w - 100), 42.0f);
+                StringFormat formatLeft;
+                formatLeft.SetAlignment(StringAlignmentNear);
+                formatLeft.SetLineAlignment(StringAlignmentCenter);
+                graphics.DrawString(L"Type passphrase & press Enter...", -1, &fontSub, rcCue, &formatLeft, &mutedBrush);
+            } else {
+                Font fontBullet(pDisplayFam, 12.0f, FontStyleBold, UnitPoint);
+                RectF rcMasked(66.0f, 75.0f, (REAL)(w - 100), 42.0f);
+                StringFormat formatLeft;
+                formatLeft.SetAlignment(StringAlignmentNear);
+                formatLeft.SetLineAlignment(StringAlignmentCenter);
+                graphics.DrawString(masked.c_str(), -1, &fontBullet, rcMasked, &formatLeft, &whiteBrush);
+            }
+
+            UIComponents::DrawCanvasButton(graphics, 30, 130, w - 60, 38, L"Confirm Passphrase (Enter)", ButtonVariant::Primary, false, false, VectorIcon::Check);
+            UIComponents::DrawCanvasButton(graphics, 30, 176, w - 60, 34, L"Cancel (Esc)", ButtonVariant::Secondary, false, false);
+        }
+
+        BitBlt(hdc, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
+        SelectObject(memDC, hOldBmp);
+        DeleteObject(hMemBmp);
+        DeleteDC(memDC);
+        EndPaint(hWnd, &ps);
+        return 0;
+    }
+    case WM_LBUTTONDOWN: {
+        int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
+        RECT rect; GetClientRect(hWnd, &rect);
+        int w = rect.right - rect.left;
+        if (x >= 30 && x <= w - 30 && y >= 130 && y <= 168) {
+            if (!enteredPass.empty()) {
+                s_policyPasskey = enteredPass;
+                s_policyPassAccepted = true;
+                DestroyWindow(hWnd);
+            }
+        } else if (x >= 30 && x <= w - 30 && y >= 176 && y <= 210) {
+            s_policyPassAccepted = false;
+            DestroyWindow(hWnd);
+        }
+        return 0;
+    }
+    case WM_CLOSE:
+        s_policyPassAccepted = false;
+        DestroyWindow(hWnd);
+        return 0;
+    }
+    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+}
+
+static bool PromptPolicyPasskey(HWND hWndParent, bool isExport, std::wstring& outPasskey) {
+    s_policyPromptTitle = isExport ? L"Set Policy Export Passkey" : L"Enter Policy Import Passkey";
+    s_policyPasskey = L"";
+    s_policyPassAccepted = false;
+
+    static bool s_classReg = false;
+    if (!s_classReg) {
+        WNDCLASSEXW wc = { sizeof(wc) };
+        wc.lpfnWndProc = PolicyPassDialogProc;
+        wc.hInstance = GetModuleHandle(NULL);
+        wc.lpszClassName = L"SurakshaPolicyPassDialogClass";
+        wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+        wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+        RegisterClassExW(&wc);
+        s_classReg = true;
+    }
+
+    HWND hwndDlg = CreateWindowExW(
+        WS_EX_TOPMOST,
+        L"SurakshaPolicyPassDialogClass", s_policyPromptTitle.c_str(),
+        WS_POPUP,
+        (GetSystemMetrics(SM_CXSCREEN) - 360) / 2,
+        (GetSystemMetrics(SM_CYSCREEN) - 235) / 2,
+        360, 235, hWndParent, NULL, GetModuleHandle(NULL), NULL
+    );
+
+    if (hwndDlg) {
+        UIComponents::ApplyRoundedRegion(hwndDlg, 20);
+        ShowWindow(hwndDlg, SW_SHOW);
+        UpdateWindow(hwndDlg);
+        SetForegroundWindow(hwndDlg);
+        MSG msg;
+        while (IsWindow(hwndDlg) && GetMessageW(&msg, NULL, 0, 0)) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+    }
+
+    if (s_policyPassAccepted && !s_policyPasskey.empty()) {
+        outPasskey = s_policyPasskey;
+        return true;
+    }
+    return false;
+}
+
 // Helper: Check if point is inside RECT
 static bool PtInRectStruct(const RECT& r, int x, int y) {
     return (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom);
@@ -545,18 +761,37 @@ static bool EnsureSecurityConfigured(HWND hWnd) {
     auto& settings = ConfigManager::GetInstance().GetSettings();
     if (!settings.useWindowsAuth && !SecurityManager::GetInstance().HasCustomPin()) {
         int choice = MessageBoxW(hWnd,
-            L"Before protecting applications, please choose your authorization method:\n\n"
-            L"• Click YES to authorize via Windows Hello / PIN / Biometrics (Recommended)\n"
-            L"• Click NO to set a Custom Master Passcode\n"
+            L"Before protecting applications, you must configure an authentication method:\n\n"
+            L"• Click YES to use Windows Hello Face, Fingerprint, or PIN (Recommended)\n"
+            L"• Click NO to create a Custom Master Passcode inside Suraksha\n"
             L"• Click CANCEL to abort",
             L"Suraksha - Security Setup Required",
             MB_YESNOCANCEL | MB_ICONQUESTION);
 
         if (choice == IDYES) {
-            settings.useWindowsAuth = true;
-            ConfigManager::GetInstance().SaveSettings();
-            AuditLogger::GetInstance().LogEvent(L"SECURITY_SETUP", L"Windows Hello / PIN configured as primary unlock method.");
-            return true;
+            std::wstring authErr = L"";
+            bool testOk = SecurityManager::GetInstance().VerifyWindowsCredentials(hWnd, authErr);
+            if (testOk) {
+                settings.useWindowsAuth = true;
+                ConfigManager::GetInstance().SaveSettings();
+                AuditLogger::GetInstance().LogEvent(L"SECURITY_SETUP", L"Windows Hello / PIN configured as primary unlock method.");
+                return true;
+            } else {
+                int noPinChoice = MessageBoxW(hWnd,
+                    L"Windows authorization could not be completed or no Windows PIN/Password is set up on this device.\n\n"
+                    L"• Click RETRY to open Windows Sign-in Settings and set up a PIN/Password now.\n"
+                    L"• Click CANCEL to set a Custom Master Passcode inside Suraksha instead.",
+                    L"Suraksha - Setup Windows Sign-in",
+                    MB_RETRYCANCEL | MB_ICONEXCLAMATION);
+
+                if (noPinChoice == IDRETRY) {
+                    ShellExecuteW(NULL, L"open", L"ms-settings:signinoptions", NULL, NULL, SW_SHOWNORMAL);
+                    return false;
+                } else {
+                    PromptSetCustomPin(hWnd);
+                    return SecurityManager::GetInstance().HasCustomPin();
+                }
+            }
         } else if (choice == IDNO) {
             PromptSetCustomPin(hWnd);
             return SecurityManager::GetInstance().HasCustomPin();
@@ -582,12 +817,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
     const RECT rcPreset3         = { 505, 490, 615, 526 }; // Terminal
     const RECT rcPreset4         = { 625, 490, 755, 526 }; // Calculator
 
-    // Page 1: Security Controls
-    const RECT rcToggleEnable    = { 255, 120, 785, 158 };
-    const RECT rcToggleWinAuth   = { 255, 180, 785, 218 };
-    const RECT rcToggleCustomPin = { 255, 240, 785, 278 };
-    const RECT rcBtnSetPin       = { 255, 296, 600, 338 };
-    const RECT rcToggleAutoStart = { 255, 356, 785, 394 };
+    // Page 1: Security Controls (3 Cards)
+    const RECT rcToggleEnable    = { 255, 68, 785, 102 };
+    const RECT rcToggleWinAuth   = { 255, 106, 515, 140 };
+    const RECT rcToggleCustomPin = { 525, 106, 785, 140 };
+    const RECT rcBtnSetPin       = { 255, 148, 515, 186 };
+    const RECT rcToggleAutoStart = { 525, 148, 785, 186 };
+
+    // Card 2: Scheduled Protection (Active Hours)
+    const RECT rcToggleSchedule  = { 255, 238, 785, 272 };
+    const RECT rcSchedStartDec   = { 365, 280, 395, 312 };
+    const RECT rcSchedStartInc   = { 480, 280, 510, 312 };
+    const RECT rcSchedEndDec     = { 640, 280, 670, 312 };
+    const RECT rcSchedEndInc     = { 755, 280, 785, 312 };
+
+    // Card 3: Enterprise Policy Management
+    const RECT rcBtnExportPolicy = { 255, 415, 515, 455 };
+    const RECT rcBtnImportPolicy = { 525, 415, 785, 455 };
 
     // Page 2: Software Update Controls (macOS Style)
     const RECT rcBtnCheckUpdate  = { 255, 220, 435, 262 };
@@ -599,7 +845,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
     // Page 3: Audit Logs Controls
     const RECT rcBtnOpenLog      = { 255, 480, 520, 522 };
 
-    // Page 4: About Controls
+    // Page 4: About Controls & Language Selector
+    const RECT rcLangEN          = { 255, 180, 420, 218 };
+    const RECT rcLangHI          = { 430, 180, 600, 218 };
+    const RECT rcLangES          = { 610, 180, 785, 218 };
+    const RECT rcLangDE          = { 255, 226, 420, 264 };
+    const RECT rcLangFR          = { 430, 226, 600, 264 };
+    const RECT rcLangJA          = { 610, 226, 785, 264 };
+
     const RECT rcBtnYABP         = { 255, 465, 420, 508 };
     const RECT rcBtnDev          = { 435, 465, 595, 508 };
     const RECT rcBtnGithub       = { 610, 465, 785, 508 };
@@ -683,6 +936,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             else if (PtInRectStruct(rcToggleCustomPin, x, y)) g_hoverControlId = ID_CANVAS_TOGGLE_CUSTOMPIN;
             else if (PtInRectStruct(rcBtnSetPin, x, y)) g_hoverControlId = ID_CANVAS_BTN_SETPIN;
             else if (PtInRectStruct(rcToggleAutoStart, x, y)) g_hoverControlId = ID_CANVAS_TOGGLE_AUTOSTART;
+            else if (PtInRectStruct(rcToggleSchedule, x, y)) g_hoverControlId = ID_CANVAS_TOGGLE_SCHEDULE;
+            else if (PtInRectStruct(rcSchedStartDec, x, y)) g_hoverControlId = ID_CANVAS_BTN_SCHED_S_DEC;
+            else if (PtInRectStruct(rcSchedStartInc, x, y)) g_hoverControlId = ID_CANVAS_BTN_SCHED_S_INC;
+            else if (PtInRectStruct(rcSchedEndDec, x, y)) g_hoverControlId = ID_CANVAS_BTN_SCHED_E_DEC;
+            else if (PtInRectStruct(rcSchedEndInc, x, y)) g_hoverControlId = ID_CANVAS_BTN_SCHED_E_INC;
+            else if (PtInRectStruct(rcBtnExportPolicy, x, y)) g_hoverControlId = ID_CANVAS_BTN_EXPORT_POL;
+            else if (PtInRectStruct(rcBtnImportPolicy, x, y)) g_hoverControlId = ID_CANVAS_BTN_IMPORT_POL;
         }
         // Page 2 Hover (Software Update)
         else if (g_activeTab == TAB_UPDATES) {
@@ -697,9 +957,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         else if (g_activeTab == TAB_LOGS) {
             if (PtInRectStruct(rcBtnOpenLog, x, y)) g_hoverControlId = ID_CANVAS_BTN_OPENLOG;
         }
-        // Page 4 Hover (About Links)
+        // Page 4 Hover (About Links & Language Selector)
         else if (g_activeTab == TAB_ABOUT) {
-            if (PtInRectStruct(rcBtnYABP, x, y)) g_hoverControlId = ID_CANVAS_BTN_YABP;
+            if (PtInRectStruct(rcLangEN, x, y)) g_hoverControlId = ID_CANVAS_LANG_EN;
+            else if (PtInRectStruct(rcLangHI, x, y)) g_hoverControlId = ID_CANVAS_LANG_HI;
+            else if (PtInRectStruct(rcLangES, x, y)) g_hoverControlId = ID_CANVAS_LANG_ES;
+            else if (PtInRectStruct(rcLangDE, x, y)) g_hoverControlId = ID_CANVAS_LANG_DE;
+            else if (PtInRectStruct(rcLangFR, x, y)) g_hoverControlId = ID_CANVAS_LANG_FR;
+            else if (PtInRectStruct(rcLangJA, x, y)) g_hoverControlId = ID_CANVAS_LANG_JA;
+            else if (PtInRectStruct(rcBtnYABP, x, y)) g_hoverControlId = ID_CANVAS_BTN_YABP;
             else if (PtInRectStruct(rcBtnDev, x, y)) g_hoverControlId = ID_CANVAS_BTN_DEV;
             else if (PtInRectStruct(rcBtnGithub, x, y)) g_hoverControlId = ID_CANVAS_BTN_GITHUB;
         }
@@ -874,6 +1140,93 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 PromptSetCustomPin(hWnd);
                 return 0;
             }
+            // Scheduled Protection Actions
+            if (PtInRectStruct(rcToggleSchedule, x, y)) {
+                auto& settings = ConfigManager::GetInstance().GetSettings();
+                settings.scheduleEnabled = !settings.scheduleEnabled;
+                ConfigManager::GetInstance().SaveSettings();
+                AuditLogger::GetInstance().LogEvent(L"SCHEDULE_TOGGLE", settings.scheduleEnabled ? L"Schedule-based active hours protection enabled." : L"Schedule-based active hours protection disabled.");
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            if (PtInRectStruct(rcSchedStartDec, x, y)) {
+                auto& settings = ConfigManager::GetInstance().GetSettings();
+                if (settings.scheduleStartHour > 0) settings.scheduleStartHour--;
+                else settings.scheduleStartHour = 23;
+                ConfigManager::GetInstance().SaveSettings();
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            if (PtInRectStruct(rcSchedStartInc, x, y)) {
+                auto& settings = ConfigManager::GetInstance().GetSettings();
+                settings.scheduleStartHour = (settings.scheduleStartHour + 1) % 24;
+                ConfigManager::GetInstance().SaveSettings();
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            if (PtInRectStruct(rcSchedEndDec, x, y)) {
+                auto& settings = ConfigManager::GetInstance().GetSettings();
+                if (settings.scheduleEndHour > 0) settings.scheduleEndHour--;
+                else settings.scheduleEndHour = 23;
+                ConfigManager::GetInstance().SaveSettings();
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            if (PtInRectStruct(rcSchedEndInc, x, y)) {
+                auto& settings = ConfigManager::GetInstance().GetSettings();
+                settings.scheduleEndHour = (settings.scheduleEndHour + 1) % 24;
+                ConfigManager::GetInstance().SaveSettings();
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            // Enterprise Policy Export / Import
+            if (PtInRectStruct(rcBtnExportPolicy, x, y)) {
+                wchar_t szFile[MAX_PATH] = L"SurakshaPolicy.suraksha";
+                OPENFILENAMEW ofn = { sizeof(ofn) };
+                ofn.hwndOwner = hWnd;
+                ofn.lpstrFile = szFile;
+                ofn.nMaxFile = sizeof(szFile) / sizeof(wchar_t);
+                ofn.lpstrFilter = L"Suraksha Policy (*.suraksha)\0*.suraksha\0All Files (*.*)\0*.*\0";
+                ofn.lpstrDefExt = L"suraksha";
+                ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
+
+                if (GetSaveFileNameW(&ofn)) {
+                    std::wstring passkey = L"";
+                    if (PromptPolicyPasskey(hWnd, true, passkey)) {
+                        if (ConfigManager::GetInstance().ExportEncryptedPolicy(szFile, passkey)) {
+                            AuditLogger::GetInstance().LogEvent(L"POLICY_EXPORT", L"AES-256 policy exported to " + std::wstring(szFile));
+                            MessageBoxW(hWnd, L"Enterprise Security Policy exported successfully with AES-256 encryption!", L"Suraksha Enterprise", MB_OK | MB_ICONINFORMATION);
+                        } else {
+                            MessageBoxW(hWnd, L"Failed to export policy file. Please check file permissions.", L"Export Failed", MB_OK | MB_ICONERROR);
+                        }
+                    }
+                }
+                return 0;
+            }
+            if (PtInRectStruct(rcBtnImportPolicy, x, y)) {
+                wchar_t szFile[MAX_PATH] = { 0 };
+                OPENFILENAMEW ofn = { sizeof(ofn) };
+                ofn.hwndOwner = hWnd;
+                ofn.lpstrFile = szFile;
+                ofn.nMaxFile = sizeof(szFile) / sizeof(wchar_t);
+                ofn.lpstrFilter = L"Suraksha Policy (*.suraksha;*.dat)\0*.suraksha;*.dat\0All Files (*.*)\0*.*\0";
+                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+                if (GetOpenFileNameW(&ofn)) {
+                    std::wstring passkey = L"";
+                    if (PromptPolicyPasskey(hWnd, false, passkey)) {
+                        if (ConfigManager::GetInstance().ImportEncryptedPolicy(szFile, passkey)) {
+                            AuditLogger::GetInstance().LogEvent(L"POLICY_IMPORT", L"AES-256 policy imported from " + std::wstring(szFile));
+                            UpdateTrayIconMetrics(hWnd);
+                            InvalidateRect(hWnd, NULL, FALSE);
+                            MessageBoxW(hWnd, L"Enterprise Security Policy imported and applied successfully!", L"Suraksha Enterprise", MB_OK | MB_ICONINFORMATION);
+                        } else {
+                            MessageBoxW(hWnd, L"Failed to decrypt policy file. Please verify the decryption passphrase and file integrity.", L"Import Failed", MB_OK | MB_ICONERROR);
+                        }
+                    }
+                }
+                return 0;
+            }
         }
         // Page 2 Actions (Software Updates)
         else if (g_activeTab == TAB_UPDATES) {
@@ -912,8 +1265,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 return 0;
             }
         }
-        // Page 4 Actions (About Links)
+        // Page 4 Actions (About Links & Language Selector)
         else if (g_activeTab == TAB_ABOUT) {
+            auto SetAppLang = [&](int langIdx) {
+                LanguageManager::GetInstance().SetLanguage((Language)langIdx);
+                auto& s = ConfigManager::GetInstance().GetSettings();
+                s.language = langIdx;
+                ConfigManager::GetInstance().SaveSettings();
+                InvalidateRect(hWnd, NULL, FALSE);
+            };
+
+            if (PtInRectStruct(rcLangEN, x, y)) { SetAppLang(0); return 0; }
+            if (PtInRectStruct(rcLangHI, x, y)) { SetAppLang(1); return 0; }
+            if (PtInRectStruct(rcLangES, x, y)) { SetAppLang(2); return 0; }
+            if (PtInRectStruct(rcLangDE, x, y)) { SetAppLang(3); return 0; }
+            if (PtInRectStruct(rcLangFR, x, y)) { SetAppLang(4); return 0; }
+            if (PtInRectStruct(rcLangJA, x, y)) { SetAppLang(5); return 0; }
+
             if (PtInRectStruct(rcBtnYABP, x, y)) {
                 ShellExecuteW(NULL, L"open", L"https://yabp.netlify.app/", NULL, NULL, SW_SHOWNORMAL);
                 return 0;
@@ -1056,33 +1424,36 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // 2. Draw 5 Sidebar Navigation Tabs with Native MDL2 / Fluent Icons
             bool hovTab0 = (g_hoverControlId == ID_CANVAS_TAB_APPLOCKER);
             UIComponents::DrawCanvasListItem(graphics, rcTab0.left, rcTab0.top, rcTab0.right - rcTab0.left, rcTab0.bottom - rcTab0.top,
-                L"App Locker", (g_activeTab == TAB_APPLOCKER), hovTab0, VectorIcon::Lock);
+                LanguageManager::GetInstance().GetString(L"TAB_APPLOCKER"), (g_activeTab == TAB_APPLOCKER), hovTab0, VectorIcon::Lock);
 
             bool hovTab1 = (g_hoverControlId == ID_CANVAS_TAB_SECURITY);
             UIComponents::DrawCanvasListItem(graphics, rcTab1.left, rcTab1.top, rcTab1.right - rcTab1.left, rcTab1.bottom - rcTab1.top,
-                L"Security & Auth", (g_activeTab == TAB_SECURITY), hovTab1, VectorIcon::Shield);
+                LanguageManager::GetInstance().GetString(L"TAB_SECURITY"), (g_activeTab == TAB_SECURITY), hovTab1, VectorIcon::Shield);
 
             bool hovTab2 = (g_hoverControlId == ID_CANVAS_TAB_UPDATES);
             UIComponents::DrawCanvasListItem(graphics, rcTab2.left, rcTab2.top, rcTab2.right - rcTab2.left, rcTab2.bottom - rcTab2.top,
-                L"Software Update", (g_activeTab == TAB_UPDATES), hovTab2, VectorIcon::Update);
+                LanguageManager::GetInstance().GetString(L"TAB_UPDATES"), (g_activeTab == TAB_UPDATES), hovTab2, VectorIcon::Update);
 
             bool hovTab3 = (g_hoverControlId == ID_CANVAS_TAB_LOGS);
             UIComponents::DrawCanvasListItem(graphics, rcTab3.left, rcTab3.top, rcTab3.right - rcTab3.left, rcTab3.bottom - rcTab3.top,
-                L"Audit Logs", (g_activeTab == TAB_LOGS), hovTab3, VectorIcon::Logs);
+                LanguageManager::GetInstance().GetString(L"TAB_LOGS"), (g_activeTab == TAB_LOGS), hovTab3, VectorIcon::Logs);
 
             bool hovTab4 = (g_hoverControlId == ID_CANVAS_TAB_ABOUT);
             UIComponents::DrawCanvasListItem(graphics, rcTab4.left, rcTab4.top, rcTab4.right - rcTab4.left, rcTab4.bottom - rcTab4.top,
-                L"About Suraksha", (g_activeTab == TAB_ABOUT), hovTab4, VectorIcon::Info);
+                LanguageManager::GetInstance().GetString(L"TAB_ABOUT"), (g_activeTab == TAB_ABOUT), hovTab4, VectorIcon::Info);
 
             // Top Status Badge
             const auto& settings = ConfigManager::GetInstance().GetSettings();
             bool protectionActive = settings.protectionEnabled;
-            UIComponents::DrawStatusBadge(graphics, 675, 16, 135, 28, protectionActive ? L"Protected" : L"Paused", protectionActive);
+            std::wstring statusBadgeText = protectionActive ? 
+                LanguageManager::GetInstance().GetString(L"STATUS_PROTECTED") : 
+                LanguageManager::GetInstance().GetString(L"STATUS_PAUSED");
+            UIComponents::DrawStatusBadge(graphics, 675, 16, 135, 28, statusBadgeText, protectionActive);
 
             // ================= PAGE 0: APP LOCKER =================
             if (g_activeTab == TAB_APPLOCKER) {
                 RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
-                graphics.DrawString(L"Protected Applications", -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"PROTECTED_APPS").c_str(), -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
 
                 UIComponents::DrawCanvasCard(graphics, 235, 60, 575, 360, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
 
@@ -1104,12 +1475,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 bool hovAdd = (g_hoverControlId == ID_CANVAS_BTN_ADD);
                 bool prsAdd = (g_pressedControlId == ID_CANVAS_BTN_ADD);
                 UIComponents::DrawCanvasButton(graphics, rcBtnAdd.left, rcBtnAdd.top, rcBtnAdd.right - rcBtnAdd.left, rcBtnAdd.bottom - rcBtnAdd.top,
-                    L"Add Application", ButtonVariant::Primary, hovAdd, prsAdd, VectorIcon::Plus);
+                    LanguageManager::GetInstance().GetString(L"ADD_APP"), ButtonVariant::Primary, hovAdd, prsAdd, VectorIcon::Plus);
 
                 bool hovRem = (g_hoverControlId == ID_CANVAS_BTN_REMOVE);
                 bool prsRem = (g_pressedControlId == ID_CANVAS_BTN_REMOVE);
                 UIComponents::DrawCanvasButton(graphics, rcBtnRemove.left, rcBtnRemove.top, rcBtnRemove.right - rcBtnRemove.left, rcBtnRemove.bottom - rcBtnRemove.top,
-                    L"Remove Application", ButtonVariant::Danger, hovRem, prsRem, VectorIcon::Trash);
+                    LanguageManager::GetInstance().GetString(L"REMOVE_APP"), ButtonVariant::Danger, hovRem, prsRem, VectorIcon::Trash);
 
                 // Quick Presets
                 bool hovP1 = (g_hoverControlId == ID_CANVAS_PRESET_NOTEPAD);
@@ -1135,22 +1506,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // ================= PAGE 1: SECURITY & AUTH =================
             else if (g_activeTab == TAB_SECURITY) {
                 RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
-                graphics.DrawString(L"Security & Authentication Options", -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"SECURITY_DEFENSE").c_str(), -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
 
-                UIComponents::DrawCanvasCard(graphics, 235, 60, 575, 460, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
+                // --- Card 1: Primary Authentication Options ---
+                UIComponents::DrawCanvasCard(graphics, 235, 52, 575, 142, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 12);
 
                 bool hovT1 = (g_hoverControlId == ID_CANVAS_TOGGLE_ENABLE);
                 UIComponents::DrawCanvasToggle(graphics, rcToggleEnable.left, rcToggleEnable.top, rcToggleEnable.right - rcToggleEnable.left, rcToggleEnable.bottom - rcToggleEnable.top,
                     L"Enable Application Protection Engine", settings.protectionEnabled, hovT1);
 
-                std::wstring winUserLabel = L"Allow Windows Password / PIN (" + SecurityManager::GetInstance().GetCurrentWindowsUsername() + L")";
+                std::wstring winUserLabel = L"Windows Password / PIN (" + SecurityManager::GetInstance().GetCurrentWindowsUsername() + L")";
                 bool hovT2 = (g_hoverControlId == ID_CANVAS_TOGGLE_WINAUTH);
                 UIComponents::DrawCanvasToggle(graphics, rcToggleWinAuth.left, rcToggleWinAuth.top, rcToggleWinAuth.right - rcToggleWinAuth.left, rcToggleWinAuth.bottom - rcToggleWinAuth.top,
                     winUserLabel.c_str(), settings.useWindowsAuth, hovT2);
 
                 bool hovT3 = (g_hoverControlId == ID_CANVAS_TOGGLE_CUSTOMPIN);
                 UIComponents::DrawCanvasToggle(graphics, rcToggleCustomPin.left, rcToggleCustomPin.top, rcToggleCustomPin.right - rcToggleCustomPin.left, rcToggleCustomPin.bottom - rcToggleCustomPin.top,
-                    L"Allow Custom Master Passcode", settings.useCustomPin, hovT3);
+                    L"Custom Master Passcode", settings.useCustomPin, hovT3);
 
                 bool hovSetPin = (g_hoverControlId == ID_CANVAS_BTN_SETPIN);
                 bool prsSetPin = (g_pressedControlId == ID_CANVAS_BTN_SETPIN);
@@ -1159,12 +1531,71 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
                 bool hovT4 = (g_hoverControlId == ID_CANVAS_TOGGLE_AUTOSTART);
                 UIComponents::DrawCanvasToggle(graphics, rcToggleAutoStart.left, rcToggleAutoStart.top, rcToggleAutoStart.right - rcToggleAutoStart.left, rcToggleAutoStart.bottom - rcToggleAutoStart.top,
-                    L"Launch automatically when Windows starts", settings.autoStartWithWindows, hovT4);
+                    L"Start with Windows", settings.autoStartWithWindows, hovT4);
+
+                // --- Card 2: Scheduled Protection (Active Hours) ---
+                UIComponents::DrawCanvasCard(graphics, 235, 204, 575, 126, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 12);
+
+                bool hovSchedTog = (g_hoverControlId == ID_CANVAS_TOGGLE_SCHEDULE);
+                UIComponents::DrawCanvasToggle(graphics, rcToggleSchedule.left, rcToggleSchedule.top, rcToggleSchedule.right - rcToggleSchedule.left, rcToggleSchedule.bottom - rcToggleSchedule.top,
+                    LanguageManager::GetInstance().GetString(L"SCHEDULE_ENABLE"), settings.scheduleEnabled, hovSchedTog);
+
+                // Start Hour Stepper
+                RectF sLblRc(255.0f, 282.0f, 105.0f, 32.0f);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"SCHEDULE_START").c_str(), -1, &bodyFont, sLblRc, &formatLeft, &mutedBrush);
+
+                bool hovSDec = (g_hoverControlId == ID_CANVAS_BTN_SCHED_S_DEC);
+                UIComponents::DrawCanvasButton(graphics, rcSchedStartDec.left, rcSchedStartDec.top, rcSchedStartDec.right - rcSchedStartDec.left, rcSchedStartDec.bottom - rcSchedStartDec.top,
+                    L"-", ButtonVariant::Secondary, hovSDec, false);
+
+                std::wstring sValStr = FormatHour(settings.scheduleStartHour);
+                RectF sValRc((REAL)rcSchedStartDec.right, 280.0f, (REAL)(rcSchedStartInc.left - rcSchedStartDec.right), 32.0f);
+                StringFormat fmtCenter; fmtCenter.SetAlignment(StringAlignmentCenter); fmtCenter.SetLineAlignment(StringAlignmentCenter);
+                graphics.DrawString(sValStr.c_str(), -1, &sectionFont, sValRc, &fmtCenter, &whiteBrush);
+
+                bool hovSInc = (g_hoverControlId == ID_CANVAS_BTN_SCHED_S_INC);
+                UIComponents::DrawCanvasButton(graphics, rcSchedStartInc.left, rcSchedStartInc.top, rcSchedStartInc.right - rcSchedStartInc.left, rcSchedStartInc.bottom - rcSchedStartInc.top,
+                    L"+", ButtonVariant::Secondary, hovSInc, false);
+
+                // End Hour Stepper
+                RectF eLblRc(535.0f, 282.0f, 100.0f, 32.0f);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"SCHEDULE_END").c_str(), -1, &bodyFont, eLblRc, &formatLeft, &mutedBrush);
+
+                bool hovEDec = (g_hoverControlId == ID_CANVAS_BTN_SCHED_E_DEC);
+                UIComponents::DrawCanvasButton(graphics, rcSchedEndDec.left, rcSchedEndDec.top, rcSchedEndDec.right - rcSchedEndDec.left, rcSchedEndDec.bottom - rcSchedEndDec.top,
+                    L"-", ButtonVariant::Secondary, hovEDec, false);
+
+                std::wstring eValStr = FormatHour(settings.scheduleEndHour);
+                RectF eValRc((REAL)rcSchedEndDec.right, 280.0f, (REAL)(rcSchedEndInc.left - rcSchedEndDec.right), 32.0f);
+                graphics.DrawString(eValStr.c_str(), -1, &sectionFont, eValRc, &fmtCenter, &whiteBrush);
+
+                bool hovEInc = (g_hoverControlId == ID_CANVAS_BTN_SCHED_E_INC);
+                UIComponents::DrawCanvasButton(graphics, rcSchedEndInc.left, rcSchedEndInc.top, rcSchedEndInc.right - rcSchedEndInc.left, rcSchedEndInc.bottom - rcSchedEndInc.top,
+                    L"+", ButtonVariant::Secondary, hovEInc, false);
+
+                // --- Card 3: Enterprise Policy & Backup ---
+                UIComponents::DrawCanvasCard(graphics, 235, 340, 575, 130, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 12);
+
+                RectF polHeadRc(255.0f, 350.0f, 535.0f, 22.0f);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"POLICY_ENTERPRISE").c_str(), -1, &sectionFont, polHeadRc, &formatLeft, &whiteBrush);
+
+                RectF polDescRc(255.0f, 374.0f, 535.0f, 32.0f);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"POLICY_DESC").c_str(), -1, &bodyFont, polDescRc, &formatLeft, &mutedBrush);
+
+                bool hovExp = (g_hoverControlId == ID_CANVAS_BTN_EXPORT_POL);
+                bool prsExp = (g_pressedControlId == ID_CANVAS_BTN_EXPORT_POL);
+                UIComponents::DrawCanvasButton(graphics, rcBtnExportPolicy.left, rcBtnExportPolicy.top, rcBtnExportPolicy.right - rcBtnExportPolicy.left, rcBtnExportPolicy.bottom - rcBtnExportPolicy.top,
+                    LanguageManager::GetInstance().GetString(L"POLICY_EXPORT"), ButtonVariant::Secondary, hovExp, prsExp, VectorIcon::Export);
+
+                bool hovImp = (g_hoverControlId == ID_CANVAS_BTN_IMPORT_POL);
+                bool prsImp = (g_pressedControlId == ID_CANVAS_BTN_IMPORT_POL);
+                UIComponents::DrawCanvasButton(graphics, rcBtnImportPolicy.left, rcBtnImportPolicy.top, rcBtnImportPolicy.right - rcBtnImportPolicy.left, rcBtnImportPolicy.bottom - rcBtnImportPolicy.top,
+                    LanguageManager::GetInstance().GetString(L"POLICY_IMPORT"), ButtonVariant::Secondary, hovImp, prsImp, VectorIcon::Import);
             }
             // ================= PAGE 2: SOFTWARE UPDATE (macOS Style) =================
             else if (g_activeTab == TAB_UPDATES) {
                 RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
-                graphics.DrawString(L"Software Update", -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"TAB_UPDATES").c_str(), -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
 
                 // --- Upper Hero Card: Status & Download ---
                 UIComponents::DrawCanvasCard(graphics, 235, 60, 575, 215, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
@@ -1326,7 +1757,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // ================= PAGE 3: AUDIT LOGS =================
             else if (g_activeTab == TAB_LOGS) {
                 RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
-                graphics.DrawString(L"Security Audit Trails", -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"TAB_AUDIT").c_str(), -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
 
                 UIComponents::DrawCanvasCard(graphics, 235, 60, 575, 400, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
 
@@ -1351,35 +1782,55 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // ================= PAGE 4: ABOUT SURAKSHA =================
             else if (g_activeTab == TAB_ABOUT) {
                 RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
-                graphics.DrawString(L"About Suraksha", -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"TAB_ABOUT").c_str(), -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
 
-                UIComponents::DrawCanvasCard(graphics, 235, 60, 575, 460, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
+                UIComponents::DrawCanvasCard(graphics, 235, 52, 575, 470, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
 
-                // App Branding Logo
-                UIComponents::DrawAppLogo(graphics, 495, 80, 54);
+                // App Branding Logo & Header
+                UIComponents::DrawAppLogo(graphics, 495, 66, 44);
 
                 StringFormat formatCenter;
                 formatCenter.SetAlignment(StringAlignmentCenter);
                 formatCenter.SetLineAlignment(StringAlignmentCenter);
 
-                RectF titleRc(250.0f, 142.0f, 545.0f, 26.0f);
+                RectF titleRc(250.0f, 116.0f, 545.0f, 24.0f);
                 std::wstring aboutTitle = L"Suraksha - v" + std::wstring(SURAKSHA_DISPLAY_VERSION);
-                graphics.DrawString(aboutTitle.c_str(), -1, &pageHeadFont, titleRc, &formatCenter, &whiteBrush);
+                graphics.DrawString(aboutTitle.c_str(), -1, &sectionFont, titleRc, &formatCenter, &whiteBrush);
 
-                RectF yabpRc(250.0f, 172.0f, 545.0f, 22.0f);
-                graphics.DrawString(L"A YABP Initiative (Yet Another Boring Project)", -1, &sectionFont, yabpRc, &formatCenter, &blueBrush);
+                RectF yabpRc(250.0f, 140.0f, 545.0f, 18.0f);
+                graphics.DrawString(L"An YABP Initiative (Yet Another Boring Project) - Developed by Dheeraz", -1, &bodyFont, yabpRc, &formatCenter, &mutedBrush);
 
-                RectF devRc(250.0f, 200.0f, 545.0f, 20.0f);
-                graphics.DrawString(L"Developed by Dheeraz", -1, &bodyFont, devRc, &formatCenter, &whiteBrush);
+                // Display Language Selector Grid
+                UIComponents::DrawCanvasCard(graphics, 250, 165, 545, 110, Color(255, 34, 34, 38), Color(20, 255, 255, 255), 10);
+                RectF langHeadRc(265.0f, 172.0f, 515.0f, 18.0f);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"LANGUAGE_SECTION").c_str(), -1, &sectionFont, langHeadRc, &formatLeft, &whiteBrush);
+
+                int curLang = settings.language;
+                auto DrawLangBtn = [&](const RECT& r, const wchar_t* name, int langId, int cId) {
+                    bool isSel = (curLang == langId);
+                    bool isHov = (g_hoverControlId == cId);
+                    Color bColor = isSel ? Color(255, 10, 132, 255) : (isHov ? Color(255, 55, 55, 62) : Color(255, 42, 42, 46));
+                    Color brdColor = isSel ? Color(255, 10, 132, 255) : Color(30, 255, 255, 255);
+                    UIComponents::DrawCanvasCard(graphics, r.left, r.top, r.right - r.left, r.bottom - r.top, bColor, brdColor, 8);
+                    RectF rF((REAL)r.left, (REAL)r.top, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
+                    graphics.DrawString(name, -1, &bodyFont, rF, &formatCenter, isSel ? &whiteBrush : &mutedBrush);
+                };
+
+                DrawLangBtn(rcLangEN, L"English", 0, ID_CANVAS_LANG_EN);
+                DrawLangBtn(rcLangHI, L"हिंदी (Hindi)", 1, ID_CANVAS_LANG_HI);
+                DrawLangBtn(rcLangES, L"Español (Spanish)", 2, ID_CANVAS_LANG_ES);
+                DrawLangBtn(rcLangDE, L"Deutsch (German)", 3, ID_CANVAS_LANG_DE);
+                DrawLangBtn(rcLangFR, L"Français (French)", 4, ID_CANVAS_LANG_FR);
+                DrawLangBtn(rcLangJA, L"日本語 (Japanese)", 5, ID_CANVAS_LANG_JA);
 
                 // GPLv3 License Box
-                UIComponents::DrawCanvasCard(graphics, 255, 235, 535, 210, Color(255, 34, 34, 38), Color(18, 255, 255, 255), 10);
+                UIComponents::DrawCanvasCard(graphics, 250, 285, 545, 160, Color(255, 34, 34, 38), Color(18, 255, 255, 255), 10);
 
-                RectF licHeadRc(275.0f, 248.0f, 495.0f, 22.0f);
+                RectF licHeadRc(265.0f, 295.0f, 515.0f, 20.0f);
                 graphics.DrawString(L"GNU General Public License v3.0 (GPLv3)", -1, &sectionFont, licHeadRc, &formatLeft, &whiteBrush);
 
                 std::wstring fullLicDesc = L"This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 3 of the License.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.";
-                RectF licBodyRc(275.0f, 278.0f, 495.0f, 140.0f);
+                RectF licBodyRc(265.0f, 320.0f, 515.0f, 115.0f);
                 graphics.DrawString(fullLicDesc.c_str(), -1, &bodyFont, licBodyRc, &formatLeft, &mutedBrush);
 
                 // Action Buttons

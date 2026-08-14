@@ -202,6 +202,22 @@ void UIComponents::DrawIconWarning(Graphics& graphics, int x, int y, int size, C
     DrawMDL2Glyph(graphics, x, y, size, color, L"\xE7BA"); // Warning triangle
 }
 
+void UIComponents::DrawIconClock(Graphics& graphics, int x, int y, int size, Color color) {
+    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE823"); // Clock / Time
+}
+
+void UIComponents::DrawIconExport(Graphics& graphics, int x, int y, int size, Color color) {
+    DrawMDL2Glyph(graphics, x, y, size, color, L"\xEDE1"); // Export / Upload
+}
+
+void UIComponents::DrawIconImport(Graphics& graphics, int x, int y, int size, Color color) {
+    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE8B5"); // Import / Folder Open
+}
+
+void UIComponents::DrawIconLanguage(Graphics& graphics, int x, int y, int size, Color color) {
+    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE774"); // Globe / Language
+}
+
 void UIComponents::DrawProgressBar(Graphics& graphics, int x, int y, int w, int h, int percent) {
     graphics.SetSmoothingMode(SmoothingModeAntiAlias);
 
@@ -316,6 +332,10 @@ void UIComponents::DrawCanvasButton(Graphics& graphics, int x, int y, int w, int
         case VectorIcon::Download:     DrawIconDownload(graphics, iconX, iconY, iconSize, textCol); break;
         case VectorIcon::Check:        DrawIconCheck(graphics, iconX, iconY, iconSize, textCol); break;
         case VectorIcon::Warning:      DrawIconWarning(graphics, iconX, iconY, iconSize, textCol); break;
+        case VectorIcon::Clock:        DrawIconClock(graphics, iconX, iconY, iconSize, textCol); break;
+        case VectorIcon::Export:       DrawIconExport(graphics, iconX, iconY, iconSize, textCol); break;
+        case VectorIcon::Import:       DrawIconImport(graphics, iconX, iconY, iconSize, textCol); break;
+        case VectorIcon::LanguageIcon: DrawIconLanguage(graphics, iconX, iconY, iconSize, textCol); break;
         default: break;
         }
     }

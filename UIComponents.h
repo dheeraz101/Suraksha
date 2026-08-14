@@ -32,7 +32,11 @@ enum class VectorIcon {
     Update,
     Download,
     Check,
-    Warning
+    Warning,
+    Clock,
+    Export,
+    Import,
+    LanguageIcon
 };
 
 class UIComponents {
@@ -69,6 +73,10 @@ public:
     static void DrawIconDownload(Graphics& graphics, int x, int y, int size, Color color);
     static void DrawIconCheck(Graphics& graphics, int x, int y, int size, Color color);
     static void DrawIconWarning(Graphics& graphics, int x, int y, int size, Color color);
+    static void DrawIconClock(Graphics& graphics, int x, int y, int size, Color color);
+    static void DrawIconExport(Graphics& graphics, int x, int y, int size, Color color);
+    static void DrawIconImport(Graphics& graphics, int x, int y, int size, Color color);
+    static void DrawIconLanguage(Graphics& graphics, int x, int y, int size, Color color);
 
     static GraphicsPath* CreateRoundedRectPath(int x, int y, int w, int h, int r);
 };

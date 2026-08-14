@@ -74,6 +74,7 @@ static void ParseSettingsStream(std::wistream& stream, AppSettings& settings) {
             else if (key == L"remoteLockdownAlerts") settings.remoteLockdownAlerts = (val == L"1");
             else if (key == L"updateChannel") settings.updateChannel = val.empty() ? L"stable" : val;
             else if (key == L"autoCheckUpdates") settings.autoCheckUpdates = (val == L"1");
+            else if (key == L"language") settings.language = _wtoi(val.c_str());
             else if (key == L"lockedApp") {
                 if (!val.empty()) {
                     settings.lockedApps.push_back(val);
@@ -87,34 +88,32 @@ bool ConfigManager::LoadSettings() {
     std::wstring path = GetConfigFilePath();
     std::wifstream inFile(path);
     if (!inFile.is_open()) {
-        m_settings.lockedApps.push_back(L"notepad.exe");
-        m_settings.lockedApps.push_back(L"calc.exe");
         SaveSettings();
         return true;
     }
 
     std::wstring firstLine;
-    std::getline(inFile, firstLine);
+    if (std::getline(inFile, firstLine)) {
+        if (firstLine.find(L"SURAKSHA_DPAPI_CONFIG_V1") != std::wstring::npos) {
+            std::wstring hexData;
+            std::getline(inFile, hexData);
+            inFile.close();
 
-    if (firstLine == L"# SURAKSHA_DPAPI_CONFIG_V1") {
-        std::wstring hexData;
-        std::getline(inFile, hexData);
-        inFile.close();
+            std::vector<BYTE> cipherBytes = HexToBytes(hexData);
+            if (!cipherBytes.empty()) {
+                DATA_BLOB inBlob;
+                inBlob.cbData = (DWORD)cipherBytes.size();
+                inBlob.pbData = cipherBytes.data();
 
-        std::vector<BYTE> cipherBytes = HexToBytes(hexData);
-        if (!cipherBytes.empty()) {
-            DATA_BLOB inBlob;
-            inBlob.cbData = (DWORD)cipherBytes.size();
-            inBlob.pbData = cipherBytes.data();
+                DATA_BLOB outBlob;
+                if (CryptUnprotectData(&inBlob, NULL, NULL, NULL, NULL, 0, &outBlob)) {
+                    std::wstring plainText((wchar_t*)outBlob.pbData, outBlob.cbData / sizeof(wchar_t));
+                    LocalFree(outBlob.pbData);
 
-            DATA_BLOB outBlob;
-            if (CryptUnprotectData(&inBlob, NULL, NULL, NULL, NULL, 0, &outBlob)) {
-                std::wstring plainText((wchar_t*)outBlob.pbData, outBlob.cbData / sizeof(wchar_t));
-                LocalFree(outBlob.pbData);
-
-                std::wstringstream ss(plainText);
-                ParseSettingsStream(ss, m_settings);
-                return true;
+                    std::wstringstream ss(plainText);
+                    ParseSettingsStream(ss, m_settings);
+                    return true;
+                }
             }
         }
     }
@@ -150,6 +149,7 @@ bool ConfigManager::SaveSettings() {
     ss << L"remoteLockdownAlerts=" << (m_settings.remoteLockdownAlerts ? L"1" : L"0") << L"\n";
     ss << L"updateChannel=" << m_settings.updateChannel << L"\n";
     ss << L"autoCheckUpdates=" << (m_settings.autoCheckUpdates ? L"1" : L"0") << L"\n";
+    ss << L"language=" << m_settings.language << L"\n";
 
     for (const auto& app : m_settings.lockedApps) {
         ss << L"lockedApp=" << app << L"\n";
@@ -183,21 +183,155 @@ bool ConfigManager::SaveSettings() {
     return true;
 }
 
+static bool EncryptAES256(const std::wstring& plainText, const std::wstring& passKey, std::vector<BYTE>& outBytes) {
+    BYTE salt[16] = { 0 };
+    HCRYPTPROV hProv = 0;
+    if (CryptAcquireContextW(&hProv, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT)) {
+        CryptGenRandom(hProv, sizeof(salt), salt);
+        CryptReleaseContext(hProv, 0);
+    }
+
+    HCRYPTPROV hAesProv = 0;
+    if (!CryptAcquireContextW(&hAesProv, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT)) return false;
+
+    HCRYPTHASH hHash = 0;
+    if (!CryptCreateHash(hAesProv, CALG_SHA_256, 0, 0, &hHash)) {
+        CryptReleaseContext(hAesProv, 0);
+        return false;
+    }
+
+    std::wstring saltedKey = passKey + L":" + BytesToHex(salt, sizeof(salt));
+    CryptHashData(hHash, (BYTE*)saltedKey.c_str(), (DWORD)(saltedKey.length() * sizeof(wchar_t)), 0);
+
+    HCRYPTKEY hKey = 0;
+    if (!CryptDeriveKey(hAesProv, CALG_AES_256, hHash, 0, &hKey)) {
+        CryptDestroyHash(hHash);
+        CryptReleaseContext(hAesProv, 0);
+        return false;
+    }
+    CryptDestroyHash(hHash);
+
+    DWORD dataLen = (DWORD)(plainText.length() * sizeof(wchar_t));
+    DWORD bufLen = dataLen + 64;
+    std::vector<BYTE> cipherBuf(bufLen);
+    memcpy(cipherBuf.data(), plainText.c_str(), dataLen);
+
+    if (!CryptEncrypt(hKey, 0, TRUE, 0, cipherBuf.data(), &dataLen, bufLen)) {
+        CryptDestroyKey(hKey);
+        CryptReleaseContext(hAesProv, 0);
+        return false;
+    }
+
+    CryptDestroyKey(hKey);
+    CryptReleaseContext(hAesProv, 0);
+
+    std::string header = "SURAKSHA_ENTERPRISE_POLICY_V1\n";
+    outBytes.assign(header.begin(), header.end());
+    outBytes.insert(outBytes.end(), salt, salt + sizeof(salt));
+    outBytes.insert(outBytes.end(), cipherBuf.data(), cipherBuf.data() + dataLen);
+
+    return true;
+}
+
+static bool DecryptAES256(const std::vector<BYTE>& fileBytes, const std::wstring& passKey, std::wstring& outPlainText) {
+    std::string header = "SURAKSHA_ENTERPRISE_POLICY_V1\n";
+    if (fileBytes.size() < header.size() + 16 + 16) return false;
+
+    if (memcmp(fileBytes.data(), header.c_str(), header.size()) != 0) return false;
+
+    BYTE salt[16];
+    memcpy(salt, fileBytes.data() + header.size(), sizeof(salt));
+
+    size_t cipherOffset = header.size() + sizeof(salt);
+    DWORD cipherLen = (DWORD)(fileBytes.size() - cipherOffset);
+    std::vector<BYTE> cipherBuf(cipherLen);
+    memcpy(cipherBuf.data(), fileBytes.data() + cipherOffset, cipherLen);
+
+    HCRYPTPROV hAesProv = 0;
+    if (!CryptAcquireContextW(&hAesProv, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT)) return false;
+
+    HCRYPTHASH hHash = 0;
+    if (!CryptCreateHash(hAesProv, CALG_SHA_256, 0, 0, &hHash)) {
+        CryptReleaseContext(hAesProv, 0);
+        return false;
+    }
+
+    std::wstring saltedKey = passKey + L":" + BytesToHex(salt, sizeof(salt));
+    CryptHashData(hHash, (BYTE*)saltedKey.c_str(), (DWORD)(saltedKey.length() * sizeof(wchar_t)), 0);
+
+    HCRYPTKEY hKey = 0;
+    if (!CryptDeriveKey(hAesProv, CALG_AES_256, hHash, 0, &hKey)) {
+        CryptDestroyHash(hHash);
+        CryptReleaseContext(hAesProv, 0);
+        return false;
+    }
+    CryptDestroyHash(hHash);
+
+    if (!CryptDecrypt(hKey, 0, TRUE, 0, cipherBuf.data(), &cipherLen)) {
+        CryptDestroyKey(hKey);
+        CryptReleaseContext(hAesProv, 0);
+        return false;
+    }
+
+    CryptDestroyKey(hKey);
+    CryptReleaseContext(hAesProv, 0);
+
+    outPlainText.assign((wchar_t*)cipherBuf.data(), cipherLen / sizeof(wchar_t));
+    return true;
+}
+
 bool ConfigManager::ExportEncryptedPolicy(const std::wstring& exportPath, const std::wstring& passKey) {
     SaveSettings();
-    std::wstring configPath = GetConfigFilePath();
-    return CopyFileW(configPath.c_str(), exportPath.c_str(), FALSE) != FALSE;
+
+    std::wstringstream ss;
+    ss << L"# Suraksha Configuration File\n";
+    ss << L"customPinHash=" << m_settings.customPinHash << L"\n";
+    ss << L"customPinSalt=" << m_settings.customPinSalt << L"\n";
+    ss << L"useWindowsAuth=" << (m_settings.useWindowsAuth ? L"1" : L"0") << L"\n";
+    ss << L"useCustomPin=" << (m_settings.useCustomPin ? L"1" : L"0") << L"\n";
+    ss << L"protectionEnabled=" << (m_settings.protectionEnabled ? L"1" : L"0") << L"\n";
+    ss << L"autoStartWithWindows=" << (m_settings.autoStartWithWindows ? L"1" : L"0") << L"\n";
+    ss << L"scheduleEnabled=" << (m_settings.scheduleEnabled ? L"1" : L"0") << L"\n";
+    ss << L"scheduleStartHour=" << m_settings.scheduleStartHour << L"\n";
+    ss << L"scheduleEndHour=" << m_settings.scheduleEndHour << L"\n";
+    ss << L"updateChannel=" << m_settings.updateChannel << L"\n";
+    ss << L"autoCheckUpdates=" << (m_settings.autoCheckUpdates ? L"1" : L"0") << L"\n";
+    ss << L"language=" << m_settings.language << L"\n";
+
+    for (const auto& app : m_settings.lockedApps) {
+        ss << L"lockedApp=" << app << L"\n";
+    }
+
+    std::vector<BYTE> encryptedBytes;
+    if (!EncryptAES256(ss.str(), passKey, encryptedBytes)) return false;
+
+    std::ofstream outFile(exportPath, std::ios::binary);
+    if (!outFile.is_open()) return false;
+
+    outFile.write((char*)encryptedBytes.data(), encryptedBytes.size());
+    outFile.close();
+    return true;
 }
 
 bool ConfigManager::ImportEncryptedPolicy(const std::wstring& importPath, const std::wstring& passKey) {
-    std::wstring configPath = GetConfigFilePath();
-    if (CopyFileW(importPath.c_str(), configPath.c_str(), FALSE)) {
-        return LoadSettings();
-    }
-    return false;
+    std::ifstream inFile(importPath, std::ios::binary | std::ios::ate);
+    if (!inFile.is_open()) return false;
+
+    std::streamsize size = inFile.tellg();
+    inFile.seekg(0, std::ios::beg);
+
+    std::vector<BYTE> buffer(size);
+    if (!inFile.read((char*)buffer.data(), size)) return false;
+    inFile.close();
+
+    std::wstring plainText;
+    if (!DecryptAES256(buffer, passKey, plainText)) return false;
+
+    std::wstringstream ss(plainText);
+    ParseSettingsStream(ss, m_settings);
+    SaveSettings();
+    return true;
 }
-
-
 
 void ConfigManager::AddLockedApp(const std::wstring& appPath) {
     if (!m_settings.isAppLocked(appPath)) {
