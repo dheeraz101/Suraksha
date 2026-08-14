@@ -1,2 +1,2 @@
-c3e80c7e9732aa1e390c580ada799ef09d053f6b3b9cd3febb936759431bd559  Suraksha-v2.0.0-x64.msix
-20f30f5f0e3994578750f282bb22a0eb187275d2f280656de6fd67fe23cddc4b  Suraksha.exe
+a1f0235d594cd8d494efaa60256de9bdda99a6cb304eede7bab469c469cae147  Suraksha-v2.0.0-x64.msix
+526f06ed2d4740bb93b9bbeb6c590902efbc5d2d2f677aee3d348d5a9e4cd8bc  Suraksha.exe

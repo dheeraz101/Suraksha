@@ -762,9 +762,9 @@ static bool EnsureSecurityConfigured(HWND hWnd) {
     if (!settings.useWindowsAuth && !SecurityManager::GetInstance().HasCustomPin()) {
         int choice = MessageBoxW(hWnd,
             L"Before protecting applications, you must configure an authentication method:\n\n"
-            L"• Click YES to use Windows Hello Face, Fingerprint, or PIN (Recommended)\n"
-            L"• Click NO to create a Custom Master Passcode inside Suraksha\n"
-            L"• Click CANCEL to abort",
+            L" \x2022 Click YES to use Windows Hello Face, Fingerprint, or PIN (Recommended)\n"
+            L" \x2022 Click NO to create a Custom Master Passcode inside Suraksha\n"
+            L" \x2022 Click CANCEL to abort",
             L"Suraksha - Security Setup Required",
             MB_YESNOCANCEL | MB_ICONQUESTION);
 
@@ -779,8 +779,8 @@ static bool EnsureSecurityConfigured(HWND hWnd) {
             } else {
                 int noPinChoice = MessageBoxW(hWnd,
                     L"Windows authorization could not be completed or no Windows PIN/Password is set up on this device.\n\n"
-                    L"• Click RETRY to open Windows Sign-in Settings and set up a PIN/Password now.\n"
-                    L"• Click CANCEL to set a Custom Master Passcode inside Suraksha instead.",
+                    L" \x2022 Click RETRY to open Windows Sign-in Settings and set up a PIN/Password now.\n"
+                    L" \x2022 Click CANCEL to set a Custom Master Passcode inside Suraksha instead.",
                     L"Suraksha - Setup Windows Sign-in",
                     MB_RETRYCANCEL | MB_ICONEXCLAMATION);
 
@@ -846,16 +846,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
     const RECT rcBtnOpenLog      = { 255, 480, 520, 522 };
 
     // Page 4: About Controls & Language Selector
-    const RECT rcLangEN          = { 255, 180, 420, 218 };
-    const RECT rcLangHI          = { 430, 180, 600, 218 };
-    const RECT rcLangES          = { 610, 180, 785, 218 };
-    const RECT rcLangDE          = { 255, 226, 420, 264 };
-    const RECT rcLangFR          = { 430, 226, 600, 264 };
-    const RECT rcLangJA          = { 610, 226, 785, 264 };
+    const RECT rcLangEN          = { 265, 180, 425, 218 };
+    const RECT rcLangHI          = { 435, 180, 595, 218 };
+    const RECT rcLangES          = { 605, 180, 775, 218 };
+    const RECT rcLangDE          = { 265, 224, 425, 262 };
+    const RECT rcLangFR          = { 435, 224, 595, 262 };
+    const RECT rcLangJA          = { 605, 224, 775, 262 };
 
-    const RECT rcBtnYABP         = { 255, 465, 420, 508 };
-    const RECT rcBtnDev          = { 435, 465, 595, 508 };
-    const RECT rcBtnGithub       = { 610, 465, 785, 508 };
+    const RECT rcBtnYABP         = { 250, 428, 415, 470 };
+    const RECT rcBtnDev          = { 430, 428, 595, 470 };
+    const RECT rcBtnGithub       = { 610, 428, 775, 470 };
 
     switch (message) {
     case WM_CREATE:
@@ -1648,7 +1648,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 graphics.DrawString(mainTitle.c_str(), -1, &sectionFont, titleRc, &formatLeft, &whiteBrush);
 
                 // Subtitle: Version info
-                std::wstring verLine = L"Installed: Version " + std::wstring(SURAKSHA_VERSION_STRING) + L" • Build " + std::wstring(SURAKSHA_BUILD_TAG);
+                std::wstring verLine = L"Installed: Version " + std::wstring(SURAKSHA_VERSION_STRING) + L" \x2022 Build " + std::wstring(SURAKSHA_BUILD_TAG);
                 RectF verRc(322.0f, 106.0f, 470.0f, 20.0f);
                 graphics.DrawString(verLine.c_str(), -1, &bodyFont, verRc, &formatLeft, &mutedBrush);
 
@@ -1784,25 +1784,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
                 graphics.DrawString(LanguageManager::GetInstance().GetString(L"TAB_ABOUT").c_str(), -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
 
-                UIComponents::DrawCanvasCard(graphics, 235, 52, 575, 470, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
+                UIComponents::DrawCanvasCard(graphics, 235, 52, 575, 472, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
 
                 // App Branding Logo & Header
-                UIComponents::DrawAppLogo(graphics, 495, 66, 44);
+                UIComponents::DrawAppLogo(graphics, 495, 60, 40);
 
                 StringFormat formatCenter;
                 formatCenter.SetAlignment(StringAlignmentCenter);
                 formatCenter.SetLineAlignment(StringAlignmentCenter);
 
-                RectF titleRc(250.0f, 116.0f, 545.0f, 24.0f);
+                RectF titleRc(250.0f, 102.0f, 545.0f, 22.0f);
                 std::wstring aboutTitle = L"Suraksha - v" + std::wstring(SURAKSHA_DISPLAY_VERSION);
                 graphics.DrawString(aboutTitle.c_str(), -1, &sectionFont, titleRc, &formatCenter, &whiteBrush);
 
-                RectF yabpRc(250.0f, 140.0f, 545.0f, 18.0f);
-                graphics.DrawString(L"An YABP Initiative (Yet Another Boring Project) - Developed by Dheeraz", -1, &bodyFont, yabpRc, &formatCenter, &mutedBrush);
+                RectF yabpRc(250.0f, 124.0f, 545.0f, 18.0f);
+                graphics.DrawString(L"An YABP Initiative (Yet Another Boring Project) | Developed by Dheeraz", -1, &bodyFont, yabpRc, &formatCenter, &mutedBrush);
 
                 // Display Language Selector Grid
-                UIComponents::DrawCanvasCard(graphics, 250, 165, 545, 110, Color(255, 34, 34, 38), Color(20, 255, 255, 255), 10);
-                RectF langHeadRc(265.0f, 172.0f, 515.0f, 18.0f);
+                UIComponents::DrawCanvasCard(graphics, 250, 146, 545, 126, Color(255, 34, 34, 38), Color(20, 255, 255, 255), 10);
+                RectF langHeadRc(265.0f, 154.0f, 515.0f, 20.0f);
                 graphics.DrawString(LanguageManager::GetInstance().GetString(L"LANGUAGE_SECTION").c_str(), -1, &sectionFont, langHeadRc, &formatLeft, &whiteBrush);
 
                 int curLang = settings.language;
@@ -1817,20 +1817,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 };
 
                 DrawLangBtn(rcLangEN, L"English", 0, ID_CANVAS_LANG_EN);
-                DrawLangBtn(rcLangHI, L"हिंदी (Hindi)", 1, ID_CANVAS_LANG_HI);
-                DrawLangBtn(rcLangES, L"Español (Spanish)", 2, ID_CANVAS_LANG_ES);
+                DrawLangBtn(rcLangHI, L"\x0939\x093F\x0928\x094D\x0926\x0940 (Hindi)", 1, ID_CANVAS_LANG_HI);
+                DrawLangBtn(rcLangES, L"Espa\x00F1ol (Spanish)", 2, ID_CANVAS_LANG_ES);
                 DrawLangBtn(rcLangDE, L"Deutsch (German)", 3, ID_CANVAS_LANG_DE);
-                DrawLangBtn(rcLangFR, L"Français (French)", 4, ID_CANVAS_LANG_FR);
-                DrawLangBtn(rcLangJA, L"日本語 (Japanese)", 5, ID_CANVAS_LANG_JA);
+                DrawLangBtn(rcLangFR, L"Fran\x00E7ais (French)", 4, ID_CANVAS_LANG_FR);
+                DrawLangBtn(rcLangJA, L"\x65E5\x672C\x8A9E (Japanese)", 5, ID_CANVAS_LANG_JA);
 
                 // GPLv3 License Box
-                UIComponents::DrawCanvasCard(graphics, 250, 285, 545, 160, Color(255, 34, 34, 38), Color(18, 255, 255, 255), 10);
+                UIComponents::DrawCanvasCard(graphics, 250, 280, 545, 138, Color(255, 34, 34, 38), Color(18, 255, 255, 255), 10);
 
-                RectF licHeadRc(265.0f, 295.0f, 515.0f, 20.0f);
+                RectF licHeadRc(265.0f, 290.0f, 515.0f, 20.0f);
                 graphics.DrawString(L"GNU General Public License v3.0 (GPLv3)", -1, &sectionFont, licHeadRc, &formatLeft, &whiteBrush);
 
                 std::wstring fullLicDesc = L"This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 3 of the License.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.";
-                RectF licBodyRc(265.0f, 320.0f, 515.0f, 115.0f);
+                RectF licBodyRc(265.0f, 312.0f, 515.0f, 96.0f);
                 graphics.DrawString(fullLicDesc.c_str(), -1, &bodyFont, licBodyRc, &formatLeft, &mutedBrush);
 
                 // Action Buttons
