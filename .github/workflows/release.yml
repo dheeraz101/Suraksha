@@ -15,6 +15,7 @@ jobs:
   build-and-release:
     name: Build, Sign & Package Installer + MSIX
     runs-on: windows-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -117,7 +118,13 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup -y --no-progress
+          Write-Host "Downloading Inno Setup 6 directly..."
+          $installerPath = "$env:TEMP\innosetup.exe"
+          Invoke-WebRequest -Uri "https://files.jrsoftware.org/is/6/innosetup-6.3.3.exe" -OutFile $installerPath -UseBasicParsing
+          Write-Host "Installing Inno Setup 6 silently..."
+          $proc = Start-Process -FilePath $installerPath -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /NORESTART /SP-" -PassThru -Wait
+          Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+          Write-Host "Inno Setup installed successfully!"
 
       - name: Compile Inno Setup Installer
         shell: pwsh
@@ -125,6 +132,9 @@ jobs:
           $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $isccPath)) {
             $isccPath = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+          }
+          if (!(Test-Path $isccPath)) {
+            $isccPath = (Get-ChildItem -Path "C:\Program Files*" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
           }
           Write-Host "Compiling installer with: $isccPath"
           & "$isccPath" "SurakshaSetup.iss"
