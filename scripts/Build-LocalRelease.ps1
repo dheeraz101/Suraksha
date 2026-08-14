@@ -151,17 +151,19 @@ if (-not (Test-Path $isccPath)) {
 }
 
 if ($isccPath -and (Test-Path $isccPath)) {
-    & "$isccPath" "SurakshaSetup.iss" | Out-Null
-    $installerPath = Get-ChildItem -Path "Output" -Filter "*.exe" | Select-Object -First 1 -ExpandProperty FullName
-    if ($installerPath) {
-        if ($signtool) {
-            & $signtool sign /f "$CertPath" /p "$CertPassword" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 "$installerPath"
-            if ($LASTEXITCODE -ne 0) {
-                & $signtool sign /f "$CertPath" /p "$CertPassword" /fd SHA256 "$installerPath"
+    & "$isccPath" "SurakshaSetup.iss"
+    if (Test-Path "Output") {
+        $installerPath = Get-ChildItem -Path "Output" -Filter "*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+        if ($installerPath) {
+            if ($signtool) {
+                & $signtool sign /f "$CertPath" /p "$CertPassword" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 "$installerPath"
+                if ($LASTEXITCODE -ne 0) {
+                    & $signtool sign /f "$CertPath" /p "$CertPassword" /fd SHA256 "$installerPath"
+                }
             }
+            Copy-Item "$installerPath" -Destination "$OutputDir\" -Force
+            Write-Host "[OK] Setup Installer built: $(Split-Path $installerPath -Leaf)" -ForegroundColor Green
         }
-        Copy-Item "$installerPath" -Destination "$OutputDir\" -Force
-        Write-Host "[OK] Setup Installer built: $(Split-Path $installerPath -Leaf)" -ForegroundColor Green
     }
 } else {
     Write-Warning "Inno Setup Compiler (ISCC.exe) not found, skipping installer build."

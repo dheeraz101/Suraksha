@@ -169,6 +169,7 @@ Write-Host "[OK] Updated Version.h" -ForegroundColor Green
 if (Test-Path "SurakshaSetup.iss") {
     $issContent = Get-Content "SurakshaSetup.iss" -Raw
     $issContent = $issContent -replace '#define MyAppVersion "[^"]+"', "#define MyAppVersion `"$rawDisplayVer`""
+    $issContent = $issContent -replace '#define MyAppNumericVersion "[^"]+"', "#define MyAppNumericVersion `"$semVer`""
     $issContent | Out-File -FilePath "SurakshaSetup.iss" -Encoding utf8
     Write-Host "[OK] Updated SurakshaSetup.iss" -ForegroundColor Green
 }

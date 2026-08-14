@@ -5,6 +5,7 @@
 
 #define MyAppName "Suraksha"
 #define MyAppVersion "2.0.1-beta"
+#define MyAppNumericVersion "2.0.1"
 #define MyAppPublisher "Dheeraz (YABP Initiative)"
 #define MyAppURL "https://yabp.netlify.app/"
 #define MyAppExeName "Suraksha.exe"
@@ -37,7 +38,8 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 UninstallDisplayIcon={app}\{#MyAppExeName}
-VersionInfoVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppNumericVersion}
+VersionInfoTextVersion={#MyAppVersion}
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription=Suraksha Windows Application Locker
 VersionInfoProductName=Suraksha
