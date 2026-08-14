@@ -29,21 +29,29 @@ struct AppSettings {
 
     bool isAppLocked(const std::wstring& appNameOrPath) const {
         std::wstring target = appNameOrPath;
-        std::transform(target.begin(), target.end(), target.begin(), ::tolower);
+        std::transform(target.begin(), target.end(), target.begin(), ::towlower);
+
+        std::wstring targetName = target;
+        size_t tSlash = target.find_last_of(L"\\/");
+        if (tSlash != std::wstring::npos) {
+            targetName = target.substr(tSlash + 1);
+        }
 
         for (const auto& app : lockedApps) {
             std::wstring item = app;
-            std::transform(item.begin(), item.end(), item.begin(), ::tolower);
+            std::transform(item.begin(), item.end(), item.begin(), ::towlower);
 
-            // Compare filename or full path
+            // 1. Direct path or string match
             if (target == item) return true;
-            
-            // If item is just exe name like "notepad.exe" and target is full path
-            size_t slash = target.find_last_of(L"\\/");
-            if (slash != std::wstring::npos) {
-                std::wstring fileName = target.substr(slash + 1);
-                if (fileName == item) return true;
+
+            // 2. Extract filename from item and compare
+            std::wstring itemName = item;
+            size_t iSlash = item.find_last_of(L"\\/");
+            if (iSlash != std::wstring::npos) {
+                itemName = item.substr(iSlash + 1);
             }
+
+            if (targetName == itemName) return true;
         }
         return false;
     }
@@ -71,4 +79,3 @@ private:
 
     AppSettings m_settings;
 };
-

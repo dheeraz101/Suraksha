@@ -71,6 +71,6 @@ $RECYCLE.BIN/
 ~$*
 
 # --- macOS System Files ---
-.DS_Store
-.AppleDouble
-.LSSharedFileList
+# --- Nested Sub-Projects & Repos ---
+AIDS/
+

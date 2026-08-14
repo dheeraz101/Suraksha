@@ -17,6 +17,7 @@ public:
     bool StartMonitoring(HWND hMainWnd);
     void StopMonitoring();
     void PeriodicCheck();
+    void ScanForLockedProcesses();
 
     void InterceptProcess(DWORD pid, HWND hwndTarget = NULL);
     bool IsProcessUnlocked(DWORD pid);
@@ -24,12 +25,12 @@ public:
     void LockAllProcesses();
 
     static void HideAllProcessWindows(DWORD pid);
+    static void RestoreAllProcessWindows(DWORD pid);
     static bool IsCriticalSystemProcess(const std::wstring& exeName);
     static std::wstring GetProcessNameFromPID(DWORD pid);
     static std::wstring GetProcessPathFromPID(DWORD pid);
     static DWORD GetParentPID(DWORD pid);
     static bool SuspendProcess(DWORD pid);
-
     static bool ResumeProcess(DWORD pid);
     static bool TerminateProcessByID(DWORD pid);
 
@@ -47,13 +48,19 @@ private:
         DWORD dwmsEventTime
     );
 
+    static DWORD WINAPI FastScannerThreadProc(LPVOID lpParam);
+    friend DWORD WINAPI PromptWorkerThread(LPVOID lpParam);
+
     HWND m_hMainWnd = NULL;
     HWINEVENTHOOK m_hEventHook = NULL;
+    HWINEVENTHOOK m_hCreateHook = NULL;
+    HANDLE m_hScannerThread = NULL;
+    std::atomic<bool> m_bScanning{ false };
+
     std::set<DWORD> m_unlockedPIDs;
     CRITICAL_SECTION m_cs;
 
     std::atomic<bool> m_isPromptShowing{ false };
-
     std::atomic<DWORD> m_promptingPID{ 0 };
 
     pfnNtSuspendProcess m_pfnNtSuspendProcess = nullptr;

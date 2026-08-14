@@ -1,4 +1,4 @@
-// Suraksha.cpp : Entry point for Suraksha Windows App Locker (100% Enterprise Edition)
+// Suraksha.cpp : Entry point for Suraksha Windows App Locker (v2.0 4-Tab Edition)
 #include "framework.h"
 #include "Suraksha.h"
 #include "Resource.h"
@@ -14,10 +14,12 @@
 #include <commdlg.h>
 #include <dwmapi.h>
 #include <shellapi.h>
+#include <shlobj.h>
 #include <objbase.h>
 #include <gdiplus.h>
 #include <vector>
 #include <string>
+#include <fstream>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "dwmapi.lib")
@@ -28,19 +30,35 @@ using namespace Gdiplus;
 
 #define MAX_LOADSTRING 100
 
+// Navigation Tab Constants
+#define TAB_APPLOCKER  0
+#define TAB_SECURITY   1
+#define TAB_LOGS       2
+#define TAB_ABOUT      3
+
 // Control IDs for Direct Canvas Hit Testing
-#define ID_CANVAS_BTN_ADD          3001
-#define ID_CANVAS_BTN_REMOVE       3002
-#define ID_CANVAS_PRESET_NOTEPAD   3003
-#define ID_CANVAS_PRESET_CHROME    3004
-#define ID_CANVAS_PRESET_CMD       3005
-#define ID_CANVAS_PRESET_CALC      3006
-#define ID_CANVAS_TOGGLE_ENABLE    3007
-#define ID_CANVAS_TOGGLE_WINAUTH   3008
-#define ID_CANVAS_TOGGLE_CUSTOMPIN 3009
-#define ID_CANVAS_TOGGLE_AUTOSTART 3010
-#define ID_CANVAS_BTN_SETPIN       3011
-#define ID_CANVAS_BTN_ABOUT        3012
+#define ID_CANVAS_TAB_APPLOCKER    3001
+#define ID_CANVAS_TAB_SECURITY     3002
+#define ID_CANVAS_TAB_LOGS         3003
+#define ID_CANVAS_TAB_ABOUT        3004
+
+#define ID_CANVAS_BTN_ADD          3010
+#define ID_CANVAS_BTN_REMOVE       3011
+#define ID_CANVAS_PRESET_NOTEPAD   3012
+#define ID_CANVAS_PRESET_CHROME    3013
+#define ID_CANVAS_PRESET_CMD       3014
+#define ID_CANVAS_PRESET_CALC      3015
+
+#define ID_CANVAS_TOGGLE_ENABLE    3020
+#define ID_CANVAS_TOGGLE_WINAUTH   3021
+#define ID_CANVAS_TOGGLE_CUSTOMPIN 3022
+#define ID_CANVAS_BTN_SETPIN       3023
+#define ID_CANVAS_TOGGLE_AUTOSTART 3024
+
+#define ID_CANVAS_BTN_OPENLOG      3030
+#define ID_CANVAS_BTN_YABP         3040
+#define ID_CANVAS_BTN_DEV          3041
+#define ID_CANVAS_BTN_GITHUB       3042
 
 // Global System Hotkey IDs
 #define HOTKEY_LOCKALL   101 // Ctrl + Alt + L
@@ -55,10 +73,12 @@ UINT_PTR g_nTimerID = 1001;
 ULONG_PTR g_gdiplusToken = 0;
 
 // Interactive Canvas State
+int g_activeTab = TAB_APPLOCKER;
 int g_hoverControlId = 0;
 int g_pressedControlId = 0;
 int g_selectedListIdx = -1;
 int g_hoverListIdx = -1;
+bool g_closeHover = false;
 
 // Forward declarations
 ATOM MyRegisterClass(HINSTANCE hInstance);
@@ -66,7 +86,7 @@ BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 void ApplyDarkThemeToWindow(HWND hWnd);
 void UpdateTrayIconMetrics(HWND hWnd);
-void PromptShowAboutModal(HWND hWndParent);
+void PromptSetCustomPin(HWND hWndParent);
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -130,7 +150,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance) {
     wcex.hInstance      = hInstance;
     wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SURAKSHA));
     wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground  = (HBRUSH)GetStockObject(BLACK_BRUSH); // Black background to prevent white flash!
+    wcex.hbrBackground  = (HBRUSH)GetStockObject(BLACK_BRUSH);
     wcex.lpszClassName  = szWindowClass;
     wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
@@ -141,10 +161,9 @@ void ApplyDarkThemeToWindow(HWND hWnd) {
     BOOL useDarkMode = TRUE;
     DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkMode, sizeof(useDarkMode));
 
-    COLORREF darkBorder = RGB(36, 36, 40); // Dark Slate DWM Window Border!
+    COLORREF darkBorder = RGB(36, 36, 40);
     DwmSetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, &darkBorder, sizeof(darkBorder));
 
-    // Extend DWM Frame Margins for native glass shadow effects
     MARGINS margins = { 1, 1, 1, 1 };
     DwmExtendFrameIntoClientArea(hWnd, &margins);
 }
@@ -153,15 +172,15 @@ void UpdateTrayIconMetrics(HWND hWnd) {
     const auto& settings = ConfigManager::GetInstance().GetSettings();
     int count = (int)settings.lockedApps.size();
     std::wstring statusStr = settings.protectionEnabled ? L"Active" : L"Paused";
-    std::wstring tip = L"Suraksha \x2014 " + std::to_wstring(count) + L" Apps Protected | Status: " + statusStr;
+    std::wstring tip = L"Suraksha: " + std::to_wstring(count) + L" Apps Protected | Status: " + statusStr;
     TrayIcon::GetInstance().UpdateTooltip(hWnd, tip);
 }
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
     hInst = hInstance;
 
-    int winWidth = 780;
-    int winHeight = 540;
+    int winWidth = 840;
+    int winHeight = 560;
 
     int screenW = GetSystemMetrics(SM_CXSCREEN);
     int screenH = GetSystemMetrics(SM_CYSCREEN);
@@ -171,7 +190,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
     HWND hWnd = CreateWindowExW(
         WS_EX_APPWINDOW,
         szWindowClass,
-        L"Suraksha \x2014 Privacy \x0026 Security",
+        L"Suraksha - Privacy & Security",
         WS_POPUP | WS_THICKFRAME | WS_MINIMIZEBOX,
         posX, posY, winWidth, winHeight,
         nullptr, nullptr, hInstance, nullptr
@@ -181,23 +200,23 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
 
     g_hWndMain = hWnd;
     ApplyDarkThemeToWindow(hWnd);
-    UIComponents::ApplyRoundedRegion(hWnd, 14);
+    UIComponents::ApplyRoundedRegion(hWnd, 22);
 
-    // Register Enterprise Global System Hotkeys
+    // Register Global System Hotkeys
     RegisterHotKey(hWnd, HOTKEY_LOCKALL, MOD_CONTROL | MOD_ALT, 'L');  // Ctrl + Alt + L
     RegisterHotKey(hWnd, HOTKEY_TOGGLEWIN, MOD_CONTROL | MOD_ALT, 'S'); // Ctrl + Alt + S
 
     // Create System Tray Icon
     HICON hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SURAKSHA));
     if (!hIcon) hIcon = LoadIcon(NULL, IDI_SHIELD);
-    TrayIcon::GetInstance().Create(hWnd, 1, hIcon, L"Suraksha \x2014 Privacy \x0026 Security");
+    TrayIcon::GetInstance().Create(hWnd, 1, hIcon, L"Suraksha - Privacy & Security");
     UpdateTrayIconMetrics(hWnd);
 
     // Start App Monitoring Engine
     AppLockEngine::GetInstance().StartMonitoring(hWnd);
 
-    // Set 50ms periodic timer for near-instant process scan!
-    SetTimer(hWnd, g_nTimerID, 50, NULL);
+    // 1000ms periodic timer for UI sync
+    SetTimer(hWnd, g_nTimerID, 1000, NULL);
 
     ShowWindow(hWnd, nCmdShow);
     UpdateWindow(hWnd);
@@ -205,279 +224,141 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow) {
     return TRUE;
 }
 
-// ---------------- Modern macOS About Suraksha Modal ----------------
-#define IDC_BTN_ABOUT_YABP 5001
-#define IDC_BTN_ABOUT_DEV  5002
-#define IDC_BTN_ABOUT_GIT  5003
-#define IDC_BTN_ABOUT_OK   5004
+// ---------------- 100% Direct Canvas Master Passcode Modal ----------------
+static std::wstring s_pin1 = L"";
+static std::wstring s_pin2 = L"";
+static int s_activePinField = 0; // 0 for Field 1, 1 for Field 2
+static std::wstring s_pinError = L"";
+static bool s_pinCloseHover = false;
+static int s_pinBtnHover = 0;
+static int s_pinBtnPressed = 0;
 
-static LRESULT CALLBACK AboutDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+static LRESULT CALLBACK SetPinDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    const RECT rcField1 = { 30, 70, 310, 110 };
+    const RECT rcField2 = { 30, 120, 310, 160 };
+    const RECT rcBtnSave = { 30, 175, 310, 218 };
+
     switch (uMsg) {
     case WM_CREATE: {
-        HWND hBtnYABP = CreateWindowExW(0, L"BUTTON", L"YABP Website",
-            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 25, 340, 110, 36, hWnd, (HMENU)IDC_BTN_ABOUT_YABP, GetModuleHandle(NULL), NULL);
-        UIComponents::ApplyRoundedRegion(hBtnYABP, 8);
-
-        HWND hBtnDev = CreateWindowExW(0, L"BUTTON", L"Developer",
-            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 145, 340, 100, 36, hWnd, (HMENU)IDC_BTN_ABOUT_DEV, GetModuleHandle(NULL), NULL);
-        UIComponents::ApplyRoundedRegion(hBtnDev, 8);
-
-        HWND hBtnGit = CreateWindowExW(0, L"BUTTON", L"GitHub Repo",
-            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 255, 340, 100, 36, hWnd, (HMENU)IDC_BTN_ABOUT_GIT, GetModuleHandle(NULL), NULL);
-        UIComponents::ApplyRoundedRegion(hBtnGit, 8);
-
-        HWND hBtnClose = CreateWindowExW(0, L"BUTTON", L"Close",
-            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 365, 340, 70, 36, hWnd, (HMENU)IDC_BTN_ABOUT_OK, GetModuleHandle(NULL), NULL);
-        UIComponents::ApplyRoundedRegion(hBtnClose, 8);
+        s_pin1 = L"";
+        s_pin2 = L"";
+        s_activePinField = 0;
+        s_pinError = L"";
+        s_pinCloseHover = false;
+        s_pinBtnHover = 0;
+        s_pinBtnPressed = 0;
+        SetFocus(hWnd);
         return 0;
     }
     case WM_ERASEBKGND:
         return 1;
-    case WM_DRAWITEM: {
-        LPDRAWITEMSTRUCT pdis = (LPDRAWITEMSTRUCT)lParam;
-        wchar_t btnText[128] = { 0 };
-        GetWindowTextW(pdis->hwndItem, btnText, 128);
 
-        ButtonVariant variant = ButtonVariant::Secondary;
-        if (pdis->CtlID == IDC_BTN_ABOUT_YABP) variant = ButtonVariant::Primary;
-        else if (pdis->CtlID == IDC_BTN_ABOUT_DEV || pdis->CtlID == IDC_BTN_ABOUT_GIT) variant = ButtonVariant::Secondary;
-
-        UIComponents::DrawButton(pdis->hDC, pdis, btnText, variant, Color(255, 20, 20, 23));
+    case WM_SETCURSOR:
+        SetCursor(LoadCursor(NULL, IDC_ARROW));
         return TRUE;
-    }
-    case WM_NCHITTEST: {
-        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-        ScreenToClient(hWnd, &pt);
-        if (pt.y <= 40) return HTCAPTION;
-        return DefWindowProcW(hWnd, uMsg, wParam, lParam);
-    }
-    case WM_LBUTTONDOWN: {
-        int x = GET_X_LPARAM(lParam);
-        int y = GET_Y_LPARAM(lParam);
-        if (x >= 20 && x <= 32 && y >= 18 && y <= 30) {
-            DestroyWindow(hWnd);
-            return 0;
+
+    case WM_CHAR: {
+        wchar_t ch = (wchar_t)wParam;
+        std::wstring& targetStr = (s_activePinField == 0) ? s_pin1 : s_pin2;
+
+        if (ch == VK_BACK) {
+            if (!targetStr.empty()) {
+                targetStr.pop_back();
+                s_pinError = L"";
+                InvalidateRect(hWnd, NULL, FALSE);
+            }
         }
-        break;
-    }
-    case WM_COMMAND: {
-        int wmId = LOWORD(wParam);
-        if (wmId == IDC_BTN_ABOUT_YABP) {
-            ShellExecuteW(NULL, L"open", L"https://yabp.netlify.app/", NULL, NULL, SW_SHRECOVERY || SW_SHOWNORMAL);
+        else if (ch == VK_TAB) {
+            s_activePinField = (s_activePinField == 0) ? 1 : 0;
+            InvalidateRect(hWnd, NULL, FALSE);
         }
-        else if (wmId == IDC_BTN_ABOUT_DEV) {
-            ShellExecuteW(NULL, L"open", L"https://dheeraz.dpdns.org/", NULL, NULL, SW_SHOWNORMAL);
-        }
-        else if (wmId == IDC_BTN_ABOUT_GIT) {
-            ShellExecuteW(NULL, L"open", L"https://github.com/dheeraz101", NULL, NULL, SW_SHOWNORMAL);
-        }
-        else if (wmId == IDC_BTN_ABOUT_OK) {
-            DestroyWindow(hWnd);
-        }
-        break;
-    }
-    case WM_PAINT: {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hWnd, &ps);
-
-        RECT rect;
-        GetClientRect(hWnd, &rect);
-        int winW = rect.right - rect.left;
-        int winH = rect.bottom - rect.top;
-
-        HDC memDC = CreateCompatibleDC(hdc);
-        HBITMAP hMemBmp = CreateCompatibleBitmap(hdc, winW, winH);
-        HBITMAP hOldBmp = (HBITMAP)SelectObject(memDC, hMemBmp);
-
-        HBRUSH hBg = CreateSolidBrush(RGB(20, 20, 23));
-        FillRect(memDC, &rect, hBg);
-        DeleteObject(hBg);
-
-        {
-            Graphics graphics(memDC);
-            graphics.SetSmoothingMode(SmoothingModeAntiAlias);
-
-            // Draw Card Outer Border
-            Pen borderPen(Color(255, 255, 255, 25), 1.0f);
-            graphics.DrawRectangle(&borderPen, 0, 0, (int)(rect.right - 1), (int)(rect.bottom - 1));
-
-            // Red Close Dot
-            SolidBrush redBrush(Color(255, 255, 95, 86));
-            graphics.FillEllipse(&redBrush, 20, 18, 12, 12);
-
-            // Draw Green 'S' Padlock Logo
-            UIComponents::DrawAppLogo(graphics, 210, 48, 44);
-
-            FontFamily fontFamily(L"Segoe UI");
-            Font fontTitle(&fontFamily, 14.0f, FontStyleBold, UnitPoint);
-            Font fontSub(&fontFamily, 10.5f, FontStyleBold, UnitPoint);
-            Font fontBody(&fontFamily, 9.5f, FontStyleRegular, UnitPoint);
-            Font fontMuted(&fontFamily, 8.5f, FontStyleRegular, UnitPoint);
-
-            SolidBrush whiteBrush(Color(255, 248, 250, 252));
-            SolidBrush blueBrush(Color(255, 10, 132, 255));
-            SolidBrush greenBrush(Color(255, 52, 199, 89));
-            SolidBrush mutedBrush(Color(255, 148, 163, 184));
-
-            StringFormat formatCenter;
-            formatCenter.SetAlignment(StringAlignmentCenter);
-            formatCenter.SetLineAlignment(StringAlignmentCenter);
-
-            // App Title
-            RectF rcT(20.0f, 104.0f, 420.0f, 26.0f);
-            graphics.DrawString(L"Suraksha \x2014 Privacy \x0026 Security", -1, &fontTitle, rcT, &formatCenter, &whiteBrush);
-
-            // YABP Note
-            RectF rcYABP(20.0f, 132.0f, 420.0f, 22.0f);
-            graphics.DrawString(L"An YABP Initiative  (Yet Another Boring Project)", -1, &fontSub, rcYABP, &formatCenter, &blueBrush);
-
-            // Developer Info
-            RectF rcDev(20.0f, 162.0f, 420.0f, 20.0f);
-            graphics.DrawString(L"Developed with \x2764 by Dheeraz", -1, &fontBody, rcDev, &formatCenter, &greenBrush);
-
-            // License Title & Card Box
-            UIComponents::DrawCanvasCard(graphics, 25, 195, 410, 125, Color(255, 26, 26, 30), Color(255, 255, 255, 15), 10);
-
-            StringFormat formatLeft;
-            formatLeft.SetAlignment(StringAlignmentNear);
-            formatLeft.SetLineAlignment(StringAlignmentNear);
-
-            RectF rcLicHead(40.0f, 205.0f, 380.0f, 20.0f);
-            graphics.DrawString(L"GNU General Public License v3.0 (GPLv3)", -1, &fontSub, rcLicHead, &formatLeft, &whiteBrush);
-
-            std::wstring licBody = L"This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 3.\n\nThis program is distributed WITHOUT ANY WARRANTY.";
-            RectF rcLicBody(40.0f, 230.0f, 380.0f, 80.0f);
-            graphics.DrawString(licBody.c_str(), -1, &fontMuted, rcLicBody, &formatLeft, &mutedBrush);
-        }
-
-        BitBlt(hdc, 0, 0, winW, winH, memDC, 0, 0, SRCCOPY);
-
-        SelectObject(memDC, hOldBmp);
-        DeleteObject(hMemBmp);
-        DeleteDC(memDC);
-
-        EndPaint(hWnd, &ps);
-        return 0;
-    }
-    case WM_CLOSE:
-        DestroyWindow(hWnd);
-        return 0;
-    }
-    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
-}
-
-void PromptShowAboutModal(HWND hWndParent) {
-    WNDCLASSEXW wc = { sizeof(wc) };
-    wc.lpfnWndProc = AboutDialogProc;
-    wc.hInstance = GetModuleHandle(NULL);
-    wc.lpszClassName = L"SurakshaAboutClass";
-    wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    RegisterClassExW(&wc);
-
-    HWND hwndDlg = CreateWindowExW(
-        WS_EX_TOPMOST,
-        wc.lpszClassName, L"About Suraksha",
-        WS_POPUP,
-        (GetSystemMetrics(SM_CXSCREEN) - 460) / 2,
-        (GetSystemMetrics(SM_CYSCREEN) - 400) / 2,
-        460, 400, hWndParent, NULL, GetModuleHandle(NULL), NULL
-    );
-
-    if (hwndDlg) {
-        UIComponents::ApplyRoundedRegion(hwndDlg, 14);
-        ShowWindow(hwndDlg, SW_SHOW);
-        UpdateWindow(hwndDlg);
-        MSG msg;
-        while (GetMessageW(&msg, NULL, 0, 0)) {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-    }
-    UnregisterClassW(wc.lpszClassName, GetModuleHandle(NULL));
-}
-
-// ---------------- Modern Frameless Master Passcode Modal (Direct Canvas) ----------------
-static LRESULT CALLBACK SetPinDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    switch (uMsg) {
-    case WM_CREATE: {
-        HWND hEdit1 = CreateWindowExW(0, L"EDIT", L"",
-            WS_CHILD | WS_VISIBLE | ES_PASSWORD | ES_CENTER, 30, 70, 280, 36, hWnd, (HMENU)1001, GetModuleHandle(NULL), NULL);
-        HWND hEdit2 = CreateWindowExW(0, L"EDIT", L"",
-            WS_CHILD | WS_VISIBLE | ES_PASSWORD | ES_CENTER, 30, 118, 280, 36, hWnd, (HMENU)1002, GetModuleHandle(NULL), NULL);
-
-        UIComponents::ApplyRoundedRegion(hEdit1, 8);
-        UIComponents::ApplyRoundedRegion(hEdit2, 8);
-
-        SendMessageW(hEdit1, EM_SETCUEBANNER, TRUE, (LPARAM)L"Enter New Passcode");
-        SendMessageW(hEdit2, EM_SETCUEBANNER, TRUE, (LPARAM)L"Confirm New Passcode");
-
-        HWND hBtnSave = CreateWindowExW(0, L"BUTTON", L"Save Master Passcode",
-            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 30, 172, 280, 42, hWnd, (HMENU)IDOK, GetModuleHandle(NULL), NULL);
-        UIComponents::ApplyRoundedRegion(hBtnSave, 10);
-        return 0;
-    }
-    case WM_ERASEBKGND:
-        return 1; // Prevent white erasure!
-    case WM_CTLCOLORSTATIC: {
-        HDC hdc = (HDC)wParam;
-        SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, RGB(248, 250, 252));
-        static HBRUSH hStaticBg = CreateSolidBrush(RGB(20, 20, 23));
-        return (INT_PTR)hStaticBg;
-    }
-    case WM_CTLCOLOREDIT: {
-        HDC hdc = (HDC)wParam;
-        SetBkMode(hdc, OPAQUE);
-        SetBkColor(hdc, RGB(44, 44, 46));
-        SetTextColor(hdc, RGB(255, 255, 255));
-        static HBRUSH hEditBg = CreateSolidBrush(RGB(44, 44, 46));
-        return (INT_PTR)hEditBg;
-    }
-    case WM_DRAWITEM: {
-        LPDRAWITEMSTRUCT pdis = (LPDRAWITEMSTRUCT)lParam;
-        wchar_t btnText[128] = { 0 };
-        GetWindowTextW(pdis->hwndItem, btnText, 128);
-        UIComponents::DrawButton(pdis->hDC, pdis, btnText, ButtonVariant::Primary, Color(255, 20, 20, 23));
-        return TRUE;
-    }
-    case WM_NCHITTEST: {
-        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-        ScreenToClient(hWnd, &pt);
-        if (pt.y <= 40) return HTCAPTION;
-        return DefWindowProcW(hWnd, uMsg, wParam, lParam);
-    }
-    case WM_LBUTTONDOWN: {
-        int x = GET_X_LPARAM(lParam);
-        int y = GET_Y_LPARAM(lParam);
-        if (x >= 20 && x <= 32 && y >= 18 && y <= 30) {
-            DestroyWindow(hWnd);
-            return 0;
-        }
-        break;
-    }
-    case WM_COMMAND: {
-        int wmId = LOWORD(wParam);
-        if (wmId == IDOK) {
-            wchar_t pin1[128] = { 0 };
-            wchar_t pin2[128] = { 0 };
-            GetDlgItemTextW(hWnd, 1001, pin1, 128);
-            GetDlgItemTextW(hWnd, 1002, pin2, 128);
-
-            if (wcslen(pin1) == 0) {
-                MessageBoxW(hWnd, L"Passcode cannot be empty.", L"Suraksha", MB_OK | MB_ICONWARNING);
+        else if (ch == VK_RETURN) {
+            if (s_pin1.empty()) {
+                s_pinError = L"Passcode cannot be empty.";
+                InvalidateRect(hWnd, NULL, FALSE);
                 return 0;
             }
-            if (wcscmp(pin1, pin2) != 0) {
-                MessageBoxW(hWnd, L"Passcodes do not match.", L"Suraksha", MB_OK | MB_ICONWARNING);
+            if (s_pin1 != s_pin2) {
+                s_pinError = L"Passcodes do not match.";
+                InvalidateRect(hWnd, NULL, FALSE);
                 return 0;
             }
-            SecurityManager::GetInstance().SetCustomPin(pin1);
+            SecurityManager::GetInstance().SetCustomPin(s_pin1);
             MessageBoxW(hWnd, L"Master Passcode successfully updated!", L"Suraksha", MB_OK | MB_ICONINFORMATION);
             DestroyWindow(hWnd);
         }
-        break;
+        else if (ch == VK_ESCAPE) {
+            DestroyWindow(hWnd);
+        }
+        else if (ch >= 32 && ch < 127) {
+            if (targetStr.length() < 64) {
+                targetStr.push_back(ch);
+                s_pinError = L"";
+                InvalidateRect(hWnd, NULL, FALSE);
+            }
+        }
+        return 0;
     }
+
+    case WM_MOUSEMOVE: {
+        int x = GET_X_LPARAM(lParam);
+        int y = GET_Y_LPARAM(lParam);
+
+        int oldBtn = s_pinBtnHover;
+        bool oldClose = s_pinCloseHover;
+
+        s_pinCloseHover = (x >= 18 && x <= 34 && y >= 16 && y <= 32);
+        s_pinBtnHover = (x >= rcBtnSave.left && x <= rcBtnSave.right && y >= rcBtnSave.top && y <= rcBtnSave.bottom) ? 1 : 0;
+
+        if (oldBtn != s_pinBtnHover || oldClose != s_pinCloseHover) {
+            InvalidateRect(hWnd, NULL, FALSE);
+        }
+        return 0;
+    }
+
+    case WM_LBUTTONDOWN: {
+        int x = GET_X_LPARAM(lParam);
+        int y = GET_Y_LPARAM(lParam);
+
+        if (x >= 18 && x <= 34 && y >= 16 && y <= 32) {
+            DestroyWindow(hWnd);
+            return 0;
+        }
+
+        if (x >= rcField1.left && x <= rcField1.right && y >= rcField1.top && y <= rcField1.bottom) {
+            s_activePinField = 0;
+            InvalidateRect(hWnd, NULL, FALSE);
+        }
+        else if (x >= rcField2.left && x <= rcField2.right && y >= rcField2.top && y <= rcField2.bottom) {
+            s_activePinField = 1;
+            InvalidateRect(hWnd, NULL, FALSE);
+        }
+
+        s_pinBtnPressed = s_pinBtnHover;
+        SetFocus(hWnd);
+        return 0;
+    }
+
+    case WM_LBUTTONUP: {
+        if (s_pinBtnHover == 1) {
+            if (s_pin1.empty()) {
+                s_pinError = L"Passcode cannot be empty.";
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            if (s_pin1 != s_pin2) {
+                s_pinError = L"Passcodes do not match.";
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            SecurityManager::GetInstance().SetCustomPin(s_pin1);
+            MessageBoxW(hWnd, L"Master Passcode successfully updated!", L"Suraksha", MB_OK | MB_ICONINFORMATION);
+            DestroyWindow(hWnd);
+        }
+        s_pinBtnPressed = 0;
+        return 0;
+    }
+
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hWnd, &ps);
@@ -498,26 +379,78 @@ static LRESULT CALLBACK SetPinDialogProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
         {
             Graphics graphics(memDC);
             graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+            graphics.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
 
-            // Draw Card Outer Border
-            Pen borderPen(Color(255, 255, 255, 25), 1.0f);
-            graphics.DrawRectangle(&borderPen, 0, 0, (int)(rect.right - 1), (int)(rect.bottom - 1));
+            Pen borderPen(Color(20, 255, 255, 255), 1.0f);
+            graphics.DrawRectangle(&borderPen, 0, 0, winW - 1, winH - 1);
 
-            // Single Red Close Dot
-            SolidBrush redBrush(Color(255, 255, 95, 86));
-            graphics.FillEllipse(&redBrush, 20, 18, 12, 12);
+            UIComponents::DrawCloseButton(graphics, 20, 18, 13, s_pinCloseHover);
 
-            // Header Title
-            FontFamily fontFamily(L"Segoe UI");
-            Font font(&fontFamily, 12.0f, FontStyleBold, UnitPoint);
-            SolidBrush textBrush(Color(255, 248, 250, 252));
+            FontFamily fontFamDisplay(L"Segoe UI Variable Display");
+            FontFamily fontFamText(L"Segoe UI Variable Text");
+            FontFamily fontFamFallback(L"Segoe UI");
 
-            StringFormat format;
-            format.SetAlignment(StringAlignmentNear);
-            format.SetLineAlignment(StringAlignmentCenter);
+            const FontFamily* pDisplayFam = fontFamDisplay.IsAvailable() ? &fontFamDisplay : &fontFamFallback;
+            const FontFamily* pTextFam = fontFamText.IsAvailable() ? &fontFamText : &fontFamFallback;
+
+            Font fontTitle(pDisplayFam, 12.0f, FontStyleBold, UnitPoint);
+            Font fontSub(pTextFam, 9.5f, FontStyleRegular, UnitPoint);
+            Font fontBullet(pDisplayFam, 11.0f, FontStyleBold, UnitPoint);
+            Font fontErr(pTextFam, 9.0f, FontStyleBold, UnitPoint);
+
+            SolidBrush whiteBrush(Color(255, 248, 250, 252));
+            SolidBrush mutedBrush(Color(255, 148, 163, 184));
+            SolidBrush errBrush(Color(255, 255, 69, 58));
+
+            StringFormat formatLeft;
+            formatLeft.SetAlignment(StringAlignmentNear);
+            formatLeft.SetLineAlignment(StringAlignmentCenter);
 
             RectF titleRect(45.0f, 12.0f, 270.0f, 26.0f);
-            graphics.DrawString(L"Set Master Passcode", -1, &font, titleRect, &format, &textBrush);
+            graphics.DrawString(L"Set Master Passcode", -1, &fontTitle, titleRect, &formatLeft, &whiteBrush);
+
+            // Field 1: New Passcode
+            Color b1 = (s_activePinField == 0) ? Color(255, 10, 132, 255) : Color(20, 255, 255, 255);
+            UIComponents::DrawCanvasCard(graphics, rcField1.left, rcField1.top, rcField1.right - rcField1.left, rcField1.bottom - rcField1.top, Color(255, 34, 34, 38), b1, 8);
+            UIComponents::DrawIconKey(graphics, rcField1.left + 10, rcField1.top + 12, 16, Color(255, 148, 163, 184));
+
+            if (s_pin1.empty()) {
+                RectF rc1((REAL)(rcField1.left + 34), (REAL)rcField1.top, (REAL)(rcField1.right - rcField1.left - 40), (REAL)(rcField1.bottom - rcField1.top));
+                graphics.DrawString(L"Enter New Passcode...", -1, &fontSub, rc1, &formatLeft, &mutedBrush);
+            } else {
+                std::wstring mask1 = L"";
+                for (size_t i = 0; i < s_pin1.length(); ++i) mask1 += L"\x25CF  ";
+                RectF rc1((REAL)(rcField1.left + 34), (REAL)rcField1.top, (REAL)(rcField1.right - rcField1.left - 40), (REAL)(rcField1.bottom - rcField1.top));
+                graphics.DrawString(mask1.c_str(), -1, &fontBullet, rc1, &formatLeft, &whiteBrush);
+            }
+
+            // Field 2: Confirm Passcode
+            Color b2 = (s_activePinField == 1) ? Color(255, 10, 132, 255) : Color(20, 255, 255, 255);
+            UIComponents::DrawCanvasCard(graphics, rcField2.left, rcField2.top, rcField2.right - rcField2.left, rcField2.bottom - rcField2.top, Color(255, 34, 34, 38), b2, 8);
+            UIComponents::DrawIconKey(graphics, rcField2.left + 10, rcField2.top + 12, 16, Color(255, 148, 163, 184));
+
+            if (s_pin2.empty()) {
+                RectF rc2((REAL)(rcField2.left + 34), (REAL)rcField2.top, (REAL)(rcField2.right - rcField2.left - 40), (REAL)(rcField2.bottom - rcField2.top));
+                graphics.DrawString(L"Confirm New Passcode...", -1, &fontSub, rc2, &formatLeft, &mutedBrush);
+            } else {
+                std::wstring mask2 = L"";
+                for (size_t i = 0; i < s_pin2.length(); ++i) mask2 += L"\x25CF  ";
+                RectF rc2((REAL)(rcField2.left + 34), (REAL)rcField2.top, (REAL)(rcField2.right - rcField2.left - 40), (REAL)(rcField2.bottom - rcField2.top));
+                graphics.DrawString(mask2.c_str(), -1, &fontBullet, rc2, &formatLeft, &whiteBrush);
+            }
+
+            // Save Button
+            UIComponents::DrawCanvasButton(graphics, rcBtnSave.left, rcBtnSave.top, rcBtnSave.right - rcBtnSave.left, rcBtnSave.bottom - rcBtnSave.top,
+                L"Save Master Passcode", ButtonVariant::Primary, (s_pinBtnHover == 1), (s_pinBtnPressed == 1), VectorIcon::Key);
+
+            // Error Text
+            if (!s_pinError.empty()) {
+                StringFormat formatCenter;
+                formatCenter.SetAlignment(StringAlignmentCenter);
+                formatCenter.SetLineAlignment(StringAlignmentCenter);
+                RectF rcErr(20.0f, (REAL)(winH - 24), (REAL)(winW - 40), 18.0f);
+                graphics.DrawString(s_pinError.c_str(), -1, &fontErr, rcErr, &formatCenter, &errBrush);
+            }
         }
 
         BitBlt(hdc, 0, 0, winW, winH, memDC, 0, 0, SRCCOPY);
@@ -540,7 +473,7 @@ void PromptSetCustomPin(HWND hWndParent) {
     WNDCLASSEXW wc = { sizeof(wc) };
     wc.lpfnWndProc = SetPinDialogProc;
     wc.hInstance = GetModuleHandle(NULL);
-    wc.lpszClassName = L"SurakshaSetPinClass";
+    wc.lpszClassName = L"SurakshaDirectCanvasSetPinClass";
     wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     RegisterClassExW(&wc);
@@ -550,21 +483,21 @@ void PromptSetCustomPin(HWND hWndParent) {
         wc.lpszClassName, L"Set Master Passcode",
         WS_POPUP,
         (GetSystemMetrics(SM_CXSCREEN) - 340) / 2,
-        (GetSystemMetrics(SM_CYSCREEN) - 240) / 2,
-        340, 240, hWndParent, NULL, GetModuleHandle(NULL), NULL
+        (GetSystemMetrics(SM_CYSCREEN) - 250) / 2,
+        340, 250, hWndParent, NULL, GetModuleHandle(NULL), NULL
     );
 
     if (hwndDlg) {
-        UIComponents::ApplyRoundedRegion(hwndDlg, 14);
+        UIComponents::ApplyRoundedRegion(hwndDlg, 20);
         ShowWindow(hwndDlg, SW_SHOW);
         UpdateWindow(hwndDlg);
+        SetForegroundWindow(hwndDlg);
         MSG msg;
-        while (GetMessageW(&msg, NULL, 0, 0)) {
+        while (IsWindow(hwndDlg) && GetMessageW(&msg, NULL, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
     }
-    UnregisterClassW(wc.lpszClassName, GetModuleHandle(NULL));
 }
 
 // Helper: Check if point is inside RECT
@@ -572,36 +505,72 @@ static bool PtInRectStruct(const RECT& r, int x, int y) {
     return (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom);
 }
 
+// Helper: Read last N lines from Audit Log
+static std::vector<std::wstring> GetRecentAuditLogs(int maxLines = 8) {
+    std::vector<std::wstring> lines;
+    wchar_t appData[MAX_PATH] = { 0 };
+    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, appData))) {
+        std::wstring logPath = std::wstring(appData) + L"\\Suraksha\\logs\\audit.log";
+        std::wifstream file(logPath);
+        if (file.is_open()) {
+            std::wstring line;
+            while (std::getline(file, line)) {
+                if (!line.empty()) lines.push_back(line);
+            }
+            file.close();
+        }
+    }
+    if ((int)lines.size() > maxLines) {
+        lines.erase(lines.begin(), lines.begin() + (lines.size() - maxLines));
+    }
+    return lines;
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-    // Canvas Control Coordinates Definition (Adjusted for 330px width!)
-    const RECT rcBtnAdd          = { 30, 420, 190, 458 };
-    const RECT rcBtnRemove       = { 200, 420, 360, 458 };
+    // 4 Sidebar Tabs Coordinates (x: 12 to 198)
+    const RECT rcTab0 = { 12, 100, 198, 138 }; // App Locker
+    const RECT rcTab1 = { 12, 144, 198, 182 }; // Security & Auth
+    const RECT rcTab2 = { 12, 188, 198, 226 }; // Audit Logs
+    const RECT rcTab3 = { 12, 232, 198, 270 }; // About Suraksha
 
-    // Distributed Presets across 330px width (x: 30 to 360)
-    const RECT rcPreset1         = { 30, 468, 108, 496 };  // + Notepad (78px)
-    const RECT rcPreset2         = { 114, 468, 190, 496 }; // + Chrome (76px)
-    const RECT rcPreset3         = { 196, 468, 274, 496 }; // + Terminal (78px)
-    const RECT rcPreset4         = { 280, 468, 360, 496 }; // + Calculator (80px)
+    // Page 0: App Locker Controls
+    const RECT rcBtnAdd          = { 235, 436, 430, 478 };
+    const RECT rcBtnRemove       = { 445, 436, 640, 478 };
+    const RECT rcPreset1         = { 235, 490, 345, 526 }; // Notepad
+    const RECT rcPreset2         = { 355, 490, 495, 526 }; // Google Chrome
+    const RECT rcPreset3         = { 505, 490, 615, 526 }; // Terminal
+    const RECT rcPreset4         = { 625, 490, 755, 526 }; // Calculator
 
-    const RECT rcToggleEnable    = { 415, 120, 735, 154 };
-    const RECT rcToggleWinAuth   = { 415, 175, 735, 209 };
-    const RECT rcToggleCustomPin = { 415, 230, 735, 264 };
-    const RECT rcBtnSetPin       = { 415, 280, 715, 318 };
-    const RECT rcToggleAutoStart = { 415, 335, 735, 369 };
+    // Page 1: Security Controls
+    const RECT rcToggleEnable    = { 255, 120, 785, 158 };
+    const RECT rcToggleWinAuth   = { 255, 180, 785, 218 };
+    const RECT rcToggleCustomPin = { 255, 240, 785, 278 };
+    const RECT rcBtnSetPin       = { 255, 296, 600, 338 };
+    const RECT rcToggleAutoStart = { 255, 356, 785, 394 };
 
-    const RECT rcBtnAbout        = { 520, 14, 595, 42 };
+    // Page 2: Audit Logs Controls
+    const RECT rcBtnOpenLog      = { 255, 480, 520, 522 };
+
+    // Page 3: About Controls
+    const RECT rcBtnYABP         = { 255, 465, 420, 508 };
+    const RECT rcBtnDev          = { 435, 465, 595, 508 };
+    const RECT rcBtnGithub       = { 610, 465, 785, 508 };
 
     switch (message) {
     case WM_CREATE:
         return 0;
 
     case WM_ERASEBKGND:
-        return 1; // Prevent white background erasure flash!
+        return 1;
+
+    case WM_SETCURSOR:
+        SetCursor(LoadCursor(NULL, IDC_ARROW));
+        return TRUE;
 
     case WM_HOTKEY: {
         if (wParam == HOTKEY_LOCKALL) { // Ctrl + Alt + L
             AppLockEngine::GetInstance().LockAllProcesses();
-            AuditLogger::GetInstance().LogEvent(L"HOTKEY_TRIGGERED", L"Global Hotkey Ctrl+Alt+L triggered: All protected application sessions locked.");
+            AuditLogger::GetInstance().LogEvent(L"HOTKEY_TRIGGERED", L"Global Hotkey Ctrl+Alt+L triggered: All protected sessions locked.");
             MessageBoxW(hWnd, L"All protected application sessions locked!", L"Suraksha Security", MB_OK | MB_ICONINFORMATION);
         }
         else if (wParam == HOTKEY_TOGGLEWIN) { // Ctrl + Alt + S
@@ -621,37 +590,60 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
         int oldHover = g_hoverControlId;
         int oldHoverList = g_hoverListIdx;
+        bool oldClose = g_closeHover;
 
         g_hoverControlId = 0;
         g_hoverListIdx = -1;
+        g_closeHover = (x >= 18 && x <= 34 && y >= 16 && y <= 32);
 
-        if (PtInRectStruct(rcBtnAdd, x, y)) g_hoverControlId = ID_CANVAS_BTN_ADD;
-        else if (PtInRectStruct(rcBtnRemove, x, y)) g_hoverControlId = ID_CANVAS_BTN_REMOVE;
-        else if (PtInRectStruct(rcPreset1, x, y)) g_hoverControlId = ID_CANVAS_PRESET_NOTEPAD;
-        else if (PtInRectStruct(rcPreset2, x, y)) g_hoverControlId = ID_CANVAS_PRESET_CHROME;
-        else if (PtInRectStruct(rcPreset3, x, y)) g_hoverControlId = ID_CANVAS_PRESET_CMD;
-        else if (PtInRectStruct(rcPreset4, x, y)) g_hoverControlId = ID_CANVAS_PRESET_CALC;
-        else if (PtInRectStruct(rcToggleEnable, x, y)) g_hoverControlId = ID_CANVAS_TOGGLE_ENABLE;
-        else if (PtInRectStruct(rcToggleWinAuth, x, y)) g_hoverControlId = ID_CANVAS_TOGGLE_WINAUTH;
-        else if (PtInRectStruct(rcToggleCustomPin, x, y)) g_hoverControlId = ID_CANVAS_TOGGLE_CUSTOMPIN;
-        else if (PtInRectStruct(rcBtnSetPin, x, y)) g_hoverControlId = ID_CANVAS_BTN_SETPIN;
-        else if (PtInRectStruct(rcToggleAutoStart, x, y)) g_hoverControlId = ID_CANVAS_TOGGLE_AUTOSTART;
-        else if (PtInRectStruct(rcBtnAbout, x, y)) g_hoverControlId = ID_CANVAS_BTN_ABOUT;
+        // Sidebar Tabs Hover
+        if (PtInRectStruct(rcTab0, x, y)) g_hoverControlId = ID_CANVAS_TAB_APPLOCKER;
+        else if (PtInRectStruct(rcTab1, x, y)) g_hoverControlId = ID_CANVAS_TAB_SECURITY;
+        else if (PtInRectStruct(rcTab2, x, y)) g_hoverControlId = ID_CANVAS_TAB_LOGS;
+        else if (PtInRectStruct(rcTab3, x, y)) g_hoverControlId = ID_CANVAS_TAB_ABOUT;
 
-        // ListBox Item Hover Hit Test (x: 35-355, y: 105-405)
-        if (x >= 35 && x <= 355 && y >= 105 && y <= 405) {
-            const auto& lockedApps = ConfigManager::GetInstance().GetSettings().lockedApps;
-            int itemY = 105;
-            for (size_t i = 0; i < lockedApps.size(); ++i) {
-                if (y >= itemY && y <= itemY + 36) {
-                    g_hoverListIdx = (int)i;
-                    break;
+        // Page 0 Hover
+        else if (g_activeTab == TAB_APPLOCKER) {
+            if (PtInRectStruct(rcBtnAdd, x, y)) g_hoverControlId = ID_CANVAS_BTN_ADD;
+            else if (PtInRectStruct(rcBtnRemove, x, y)) g_hoverControlId = ID_CANVAS_BTN_REMOVE;
+            else if (PtInRectStruct(rcPreset1, x, y)) g_hoverControlId = ID_CANVAS_PRESET_NOTEPAD;
+            else if (PtInRectStruct(rcPreset2, x, y)) g_hoverControlId = ID_CANVAS_PRESET_CHROME;
+            else if (PtInRectStruct(rcPreset3, x, y)) g_hoverControlId = ID_CANVAS_PRESET_CMD;
+            else if (PtInRectStruct(rcPreset4, x, y)) g_hoverControlId = ID_CANVAS_PRESET_CALC;
+
+            // List Item Hover
+            if (x >= 245 && x <= 805 && y >= 110 && y <= 410) {
+                const auto& lockedApps = ConfigManager::GetInstance().GetSettings().lockedApps;
+                int itemY = 110;
+                for (size_t i = 0; i < lockedApps.size(); ++i) {
+                    if (y >= itemY && y <= itemY + 36) {
+                        g_hoverListIdx = (int)i;
+                        break;
+                    }
+                    itemY += 40;
                 }
-                itemY += 40;
             }
         }
+        // Page 1 Hover
+        else if (g_activeTab == TAB_SECURITY) {
+            if (PtInRectStruct(rcToggleEnable, x, y)) g_hoverControlId = ID_CANVAS_TOGGLE_ENABLE;
+            else if (PtInRectStruct(rcToggleWinAuth, x, y)) g_hoverControlId = ID_CANVAS_TOGGLE_WINAUTH;
+            else if (PtInRectStruct(rcToggleCustomPin, x, y)) g_hoverControlId = ID_CANVAS_TOGGLE_CUSTOMPIN;
+            else if (PtInRectStruct(rcBtnSetPin, x, y)) g_hoverControlId = ID_CANVAS_BTN_SETPIN;
+            else if (PtInRectStruct(rcToggleAutoStart, x, y)) g_hoverControlId = ID_CANVAS_TOGGLE_AUTOSTART;
+        }
+        // Page 2 Hover
+        else if (g_activeTab == TAB_LOGS) {
+            if (PtInRectStruct(rcBtnOpenLog, x, y)) g_hoverControlId = ID_CANVAS_BTN_OPENLOG;
+        }
+        // Page 3 Hover
+        else if (g_activeTab == TAB_ABOUT) {
+            if (PtInRectStruct(rcBtnYABP, x, y)) g_hoverControlId = ID_CANVAS_BTN_YABP;
+            else if (PtInRectStruct(rcBtnDev, x, y)) g_hoverControlId = ID_CANVAS_BTN_DEV;
+            else if (PtInRectStruct(rcBtnGithub, x, y)) g_hoverControlId = ID_CANVAS_BTN_GITHUB;
+        }
 
-        if (oldHover != g_hoverControlId || oldHoverList != g_hoverListIdx) {
+        if (oldHover != g_hoverControlId || oldHoverList != g_hoverListIdx || oldClose != g_closeHover) {
             InvalidateRect(hWnd, NULL, FALSE);
         }
         return 0;
@@ -661,113 +653,175 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         int x = GET_X_LPARAM(lParam);
         int y = GET_Y_LPARAM(lParam);
 
-        // Window Traffic Light Controls (Close/Minimize/Center)
-        if (x >= 20 && x <= 32 && y >= 20 && y <= 32) {
+        // Single Red Close Button -> Closes to tray
+        if (x >= 18 && x <= 34 && y >= 16 && y <= 32) {
             ShowWindow(hWnd, SW_HIDE);
             return 0;
         }
-        else if (x >= 38 && x <= 50 && y >= 20 && y <= 32) {
-            ShowWindow(hWnd, SW_HIDE);
+
+        // Direct Tab Switching on Click
+        if (PtInRectStruct(rcTab0, x, y)) {
+            g_activeTab = TAB_APPLOCKER;
+            InvalidateRect(hWnd, NULL, FALSE);
             return 0;
         }
-        else if (x >= 56 && x <= 68 && y >= 20 && y <= 32) {
-            int screenW = GetSystemMetrics(SM_CXSCREEN);
-            int screenH = GetSystemMetrics(SM_CYSCREEN);
-            SetWindowPos(hWnd, NULL, (screenW - 780) / 2, (screenH - 540) / 2, 780, 540, SWP_NOZORDER);
+        if (PtInRectStruct(rcTab1, x, y)) {
+            g_activeTab = TAB_SECURITY;
+            InvalidateRect(hWnd, NULL, FALSE);
+            return 0;
+        }
+        if (PtInRectStruct(rcTab2, x, y)) {
+            g_activeTab = TAB_LOGS;
+            InvalidateRect(hWnd, NULL, FALSE);
+            return 0;
+        }
+        if (PtInRectStruct(rcTab3, x, y)) {
+            g_activeTab = TAB_ABOUT;
+            InvalidateRect(hWnd, NULL, FALSE);
             return 0;
         }
 
         g_pressedControlId = g_hoverControlId;
 
         // List Item Selection
-        if (g_hoverListIdx != -1) {
-            g_selectedListIdx = g_hoverListIdx;
-            InvalidateRect(hWnd, NULL, FALSE);
+        if (g_activeTab == TAB_APPLOCKER && x >= 245 && x <= 805 && y >= 110 && y <= 410) {
+            const auto& lockedApps = ConfigManager::GetInstance().GetSettings().lockedApps;
+            int itemY = 110;
+            for (size_t i = 0; i < lockedApps.size(); ++i) {
+                if (y >= itemY && y <= itemY + 36) {
+                    g_selectedListIdx = (int)i;
+                    InvalidateRect(hWnd, NULL, FALSE);
+                    break;
+                }
+                itemY += 40;
+            }
         }
         return 0;
     }
 
     case WM_LBUTTONUP: {
-        int clickedId = g_hoverControlId;
+        int x = GET_X_LPARAM(lParam);
+        int y = GET_Y_LPARAM(lParam);
         g_pressedControlId = 0;
 
-        if (clickedId == ID_CANVAS_BTN_ABOUT) {
-            PromptShowAboutModal(hWnd);
-        }
-        else if (clickedId == ID_CANVAS_TOGGLE_ENABLE) {
-            auto& settings = ConfigManager::GetInstance().GetSettings();
-            settings.protectionEnabled = !settings.protectionEnabled;
-            ConfigManager::GetInstance().SaveSettings();
-            UpdateTrayIconMetrics(hWnd);
-            InvalidateRect(hWnd, NULL, FALSE);
-        }
-        else if (clickedId == ID_CANVAS_TOGGLE_WINAUTH) {
-            auto& settings = ConfigManager::GetInstance().GetSettings();
-            settings.useWindowsAuth = !settings.useWindowsAuth;
-            ConfigManager::GetInstance().SaveSettings();
-            InvalidateRect(hWnd, NULL, FALSE);
-        }
-        else if (clickedId == ID_CANVAS_TOGGLE_CUSTOMPIN) {
-            auto& settings = ConfigManager::GetInstance().GetSettings();
-            settings.useCustomPin = !settings.useCustomPin;
-            ConfigManager::GetInstance().SaveSettings();
-            InvalidateRect(hWnd, NULL, FALSE);
-        }
-        else if (clickedId == ID_CANVAS_TOGGLE_AUTOSTART) {
-            auto& settings = ConfigManager::GetInstance().GetSettings();
-            bool newAutoStart = !settings.autoStartWithWindows;
-            ConfigManager::GetInstance().SetAutoStart(newAutoStart);
-            InvalidateRect(hWnd, NULL, FALSE);
-        }
-        else if (clickedId == ID_CANVAS_BTN_SETPIN) {
-            PromptSetCustomPin(hWnd);
-        }
-        else if (clickedId == ID_CANVAS_BTN_ADD) {
-            wchar_t szFile[MAX_PATH] = { 0 };
-            OPENFILENAMEW ofn = { sizeof(ofn) };
-            ofn.hwndOwner = hWnd;
-            ofn.lpstrFile = szFile;
-            ofn.nMaxFile = sizeof(szFile) / sizeof(wchar_t);
-            ofn.lpstrFilter = L"Executable Files (*.exe)\0*.exe\0All Files (*.*)\0*.*\0";
-            ofn.nFilterIndex = 1;
-            ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+        // Page 0 Actions
+        if (g_activeTab == TAB_APPLOCKER) {
+            if (PtInRectStruct(rcBtnAdd, x, y)) {
+                wchar_t szFile[MAX_PATH] = { 0 };
+                OPENFILENAMEW ofn = { sizeof(ofn) };
+                ofn.hwndOwner = hWnd;
+                ofn.lpstrFile = szFile;
+                ofn.nMaxFile = sizeof(szFile) / sizeof(wchar_t);
+                ofn.lpstrFilter = L"Executable Files (*.exe)\0*.exe\0All Files (*.*)\0*.*\0";
+                ofn.nFilterIndex = 1;
+                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
-            if (GetOpenFileNameW(&ofn)) {
-                ConfigManager::GetInstance().AddLockedApp(szFile);
+                if (GetOpenFileNameW(&ofn)) {
+                    ConfigManager::GetInstance().AddLockedApp(szFile);
+                    UpdateTrayIconMetrics(hWnd);
+                    InvalidateRect(hWnd, NULL, FALSE);
+                }
+                return 0;
+            }
+            if (PtInRectStruct(rcBtnRemove, x, y)) {
+                const auto& lockedApps = ConfigManager::GetInstance().GetSettings().lockedApps;
+                if (g_selectedListIdx >= 0 && g_selectedListIdx < (int)lockedApps.size()) {
+                    std::wstring appToRemove = lockedApps[g_selectedListIdx];
+                    ConfigManager::GetInstance().RemoveLockedApp(appToRemove);
+                    g_selectedListIdx = -1;
+                    UpdateTrayIconMetrics(hWnd);
+                    InvalidateRect(hWnd, NULL, FALSE);
+                }
+                return 0;
+            }
+            if (PtInRectStruct(rcPreset1, x, y)) {
+                ConfigManager::GetInstance().AddLockedApp(L"notepad.exe");
                 UpdateTrayIconMetrics(hWnd);
                 InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
             }
-        }
-        else if (clickedId == ID_CANVAS_BTN_REMOVE) {
-            const auto& lockedApps = ConfigManager::GetInstance().GetSettings().lockedApps;
-            if (g_selectedListIdx >= 0 && g_selectedListIdx < (int)lockedApps.size()) {
-                std::wstring appToRemove = lockedApps[g_selectedListIdx];
-                ConfigManager::GetInstance().RemoveLockedApp(appToRemove);
-                g_selectedListIdx = -1;
+            if (PtInRectStruct(rcPreset2, x, y)) {
+                ConfigManager::GetInstance().AddLockedApp(L"chrome.exe");
                 UpdateTrayIconMetrics(hWnd);
                 InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            if (PtInRectStruct(rcPreset3, x, y)) {
+                ConfigManager::GetInstance().AddLockedApp(L"cmd.exe");
+                UpdateTrayIconMetrics(hWnd);
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            if (PtInRectStruct(rcPreset4, x, y)) {
+                ConfigManager::GetInstance().AddLockedApp(L"calc.exe");
+                UpdateTrayIconMetrics(hWnd);
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
             }
         }
-        else if (clickedId == ID_CANVAS_PRESET_NOTEPAD) {
-            ConfigManager::GetInstance().AddLockedApp(L"notepad.exe");
-            UpdateTrayIconMetrics(hWnd);
-            InvalidateRect(hWnd, NULL, FALSE);
+        // Page 1 Actions
+        else if (g_activeTab == TAB_SECURITY) {
+            if (PtInRectStruct(rcToggleEnable, x, y)) {
+                auto& settings = ConfigManager::GetInstance().GetSettings();
+                settings.protectionEnabled = !settings.protectionEnabled;
+                ConfigManager::GetInstance().SaveSettings();
+                UpdateTrayIconMetrics(hWnd);
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            if (PtInRectStruct(rcToggleWinAuth, x, y)) {
+                auto& settings = ConfigManager::GetInstance().GetSettings();
+                settings.useWindowsAuth = !settings.useWindowsAuth;
+                ConfigManager::GetInstance().SaveSettings();
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            if (PtInRectStruct(rcToggleCustomPin, x, y)) {
+                auto& settings = ConfigManager::GetInstance().GetSettings();
+                settings.useCustomPin = !settings.useCustomPin;
+                ConfigManager::GetInstance().SaveSettings();
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            if (PtInRectStruct(rcToggleAutoStart, x, y)) {
+                auto& settings = ConfigManager::GetInstance().GetSettings();
+                bool newAutoStart = !settings.autoStartWithWindows;
+                ConfigManager::GetInstance().SetAutoStart(newAutoStart);
+                InvalidateRect(hWnd, NULL, FALSE);
+                return 0;
+            }
+            if (PtInRectStruct(rcBtnSetPin, x, y)) {
+                PromptSetCustomPin(hWnd);
+                return 0;
+            }
         }
-        else if (clickedId == ID_CANVAS_PRESET_CHROME) {
-            ConfigManager::GetInstance().AddLockedApp(L"chrome.exe");
-            UpdateTrayIconMetrics(hWnd);
-            InvalidateRect(hWnd, NULL, FALSE);
+        // Page 2 Actions
+        else if (g_activeTab == TAB_LOGS) {
+            if (PtInRectStruct(rcBtnOpenLog, x, y)) {
+                wchar_t appData[MAX_PATH] = { 0 };
+                if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, appData))) {
+                    std::wstring logPath = std::wstring(appData) + L"\\Suraksha\\logs\\audit.log";
+                    ShellExecuteW(NULL, L"open", logPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                }
+                return 0;
+            }
         }
-        else if (clickedId == ID_CANVAS_PRESET_CMD) {
-            ConfigManager::GetInstance().AddLockedApp(L"cmd.exe");
-            UpdateTrayIconMetrics(hWnd);
-            InvalidateRect(hWnd, NULL, FALSE);
+        // Page 3 Actions (About Links)
+        else if (g_activeTab == TAB_ABOUT) {
+            if (PtInRectStruct(rcBtnYABP, x, y)) {
+                ShellExecuteW(NULL, L"open", L"https://yabp.netlify.app/", NULL, NULL, SW_SHOWNORMAL);
+                return 0;
+            }
+            if (PtInRectStruct(rcBtnDev, x, y)) {
+                ShellExecuteW(NULL, L"open", L"https://dheeraz.dpdns.org/", NULL, NULL, SW_SHOWNORMAL);
+                return 0;
+            }
+            if (PtInRectStruct(rcBtnGithub, x, y)) {
+                ShellExecuteW(NULL, L"open", L"https://github.com/dheeraz101/Suraksha", NULL, NULL, SW_SHOWNORMAL);
+                return 0;
+            }
         }
-        else if (clickedId == ID_CANVAS_PRESET_CALC) {
-            ConfigManager::GetInstance().AddLockedApp(L"calc.exe");
-            UpdateTrayIconMetrics(hWnd);
-            InvalidateRect(hWnd, NULL, FALSE);
-        }
+
         return 0;
     }
 
@@ -775,7 +829,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
         ScreenToClient(hWnd, &pt);
 
-        if (pt.x >= 15 && pt.x <= 75 && pt.y >= 15 && pt.y <= 35) {
+        if (pt.x >= 15 && pt.x <= 40 && pt.y >= 15 && pt.y <= 35) {
             return HTCLIENT;
         }
         if (pt.y <= 50) {
@@ -815,12 +869,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             return 0;
         }
 
-        // Native Hardware-Accelerated GDI Double-Buffer Memory DC
         HDC memDC = CreateCompatibleDC(hdc);
         HBITMAP hMemBmp = CreateCompatibleBitmap(hdc, winW, winH);
         HBITMAP hOldBmp = (HBITMAP)SelectObject(memDC, hMemBmp);
 
-        // Pre-fill memory DC with macOS Dark Slate (#141417)
+        // Pre-fill memory DC with Dark Content Background (#141417)
         HBRUSH hBg = CreateSolidBrush(RGB(20, 20, 23));
         FillRect(memDC, &rect, hBg);
         DeleteObject(hBg);
@@ -828,109 +881,226 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         {
             Graphics graphics(memDC);
             graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+            graphics.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
 
-            // 1. Draw Traffic Light Dots (Red #FF5F56, Yellow #FFBD2E, Green #27C93F)
-            UIComponents::DrawTrafficLights(graphics, 20, 20);
+            // 1. Draw Left Sidebar Background (#17171A)
+            SolidBrush sidebarBrush(Color(255, 23, 23, 26));
+            graphics.FillRectangle(&sidebarBrush, 0, 0, 210, winH);
 
-            // Draw Green 'S' Padlock Icon in Header
-            UIComponents::DrawAppLogo(graphics, 85, 14, 22);
+            Pen sidebarDivider(Color(18, 255, 255, 255), 1.0f);
+            graphics.DrawLine(&sidebarDivider, 210, 0, 210, winH);
 
-            // 2. Draw Window Header Title
-            FontFamily fontFamily(L"Segoe UI");
-            Font titleFont(&fontFamily, 13.5f, FontStyleBold, UnitPoint);
+            // Single Red Close Button
+            UIComponents::DrawCloseButton(graphics, 20, 18, 13, g_closeHover);
+
+            // Sidebar Logo + Brand Title
+            UIComponents::DrawAppLogo(graphics, 20, 52, 22);
+
+            // Premium Modern Typography Stack with Segoe UI Variable fallback
+            FontFamily fontFamDisplay(L"Segoe UI Variable Display");
+            FontFamily fontFamText(L"Segoe UI Variable Text");
+            FontFamily fontFamFallback(L"Segoe UI");
+
+            const FontFamily* pDisplayFam = fontFamDisplay.IsAvailable() ? &fontFamDisplay : &fontFamFallback;
+            const FontFamily* pTextFam = fontFamText.IsAvailable() ? &fontFamText : &fontFamFallback;
+
+            Font brandFont(pDisplayFam, 12.5f, FontStyleBold, UnitPoint);
+            Font pageHeadFont(pDisplayFam, 14.5f, FontStyleBold, UnitPoint);
+            Font sectionFont(pDisplayFam, 11.0f, FontStyleBold, UnitPoint);
+            Font bodyFont(pTextFam, 9.5f, FontStyleRegular, UnitPoint);
+
             SolidBrush whiteBrush(Color(255, 248, 250, 252));
+            SolidBrush mutedBrush(Color(255, 148, 163, 184));
+            SolidBrush blueBrush(Color(255, 10, 132, 255));
 
             StringFormat formatLeft;
             formatLeft.SetAlignment(StringAlignmentNear);
             formatLeft.SetLineAlignment(StringAlignmentCenter);
 
-            RectF titleRect(115.0f, 12.0f, 320.0f, 28.0f);
-            graphics.DrawString(L"Suraksha \x2014 Privacy \x0026 Security", -1, &titleFont, titleRect, &formatLeft, &whiteBrush);
+            RectF brandRect(48.0f, 50.0f, 150.0f, 26.0f);
+            graphics.DrawString(L"Suraksha", -1, &brandFont, brandRect, &formatLeft, &whiteBrush);
 
-            // Draw About Button next to Status Badge
-            bool hovAbout = (g_hoverControlId == ID_CANVAS_BTN_ABOUT);
-            bool prsAbout = (g_pressedControlId == ID_CANVAS_BTN_ABOUT);
-            UIComponents::DrawCanvasButton(graphics, 520, 14, 75, 28, L"About", ButtonVariant::Secondary, hovAbout, prsAbout);
+            // 2. Draw 4 Sidebar Navigation Tabs with Native MDL2 / Fluent Icons
+            bool hovTab0 = (g_hoverControlId == ID_CANVAS_TAB_APPLOCKER);
+            UIComponents::DrawCanvasListItem(graphics, rcTab0.left, rcTab0.top, rcTab0.right - rcTab0.left, rcTab0.bottom - rcTab0.top,
+                L"App Locker", (g_activeTab == TAB_APPLOCKER), hovTab0, VectorIcon::Lock);
 
-            // 3. Draw Status Indicator Pill
+            bool hovTab1 = (g_hoverControlId == ID_CANVAS_TAB_SECURITY);
+            UIComponents::DrawCanvasListItem(graphics, rcTab1.left, rcTab1.top, rcTab1.right - rcTab1.left, rcTab1.bottom - rcTab1.top,
+                L"Security & Auth", (g_activeTab == TAB_SECURITY), hovTab1, VectorIcon::Shield);
+
+            bool hovTab2 = (g_hoverControlId == ID_CANVAS_TAB_LOGS);
+            UIComponents::DrawCanvasListItem(graphics, rcTab2.left, rcTab2.top, rcTab2.right - rcTab2.left, rcTab2.bottom - rcTab2.top,
+                L"Audit Logs", (g_activeTab == TAB_LOGS), hovTab2, VectorIcon::Logs);
+
+            bool hovTab3 = (g_hoverControlId == ID_CANVAS_TAB_ABOUT);
+            UIComponents::DrawCanvasListItem(graphics, rcTab3.left, rcTab3.top, rcTab3.right - rcTab3.left, rcTab3.bottom - rcTab3.top,
+                L"About Suraksha", (g_activeTab == TAB_ABOUT), hovTab3, VectorIcon::Info);
+
+            // Top Status Badge
             const auto& settings = ConfigManager::GetInstance().GetSettings();
             bool protectionActive = settings.protectionEnabled;
-            UIComponents::DrawStatusBadge(graphics, 610, 14, 130, 28, protectionActive ? L"Protected" : L"Paused", protectionActive);
+            UIComponents::DrawStatusBadge(graphics, 675, 16, 135, 28, protectionActive ? L"Protected" : L"Paused", protectionActive);
 
-            // 4. Draw Left macOS Sidebar Card Container (#1A1A1E)
-            Font headerFont(&fontFamily, 11.0f, FontStyleBold, UnitPoint);
-            RectF leftHeadRect(30.0f, 70.0f, 330.0f, 24.0f);
-            graphics.DrawString(L"Protected Applications", -1, &headerFont, leftHeadRect, &formatLeft, &whiteBrush);
+            // ================= PAGE 0: APP LOCKER =================
+            if (g_activeTab == TAB_APPLOCKER) {
+                RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
+                graphics.DrawString(L"Protected Applications", -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
 
-            UIComponents::DrawCanvasCard(graphics, 30, 100, 330, 310, Color(255, 26, 26, 30), Color(255, 255, 255, 15), 12);
+                UIComponents::DrawCanvasCard(graphics, 235, 60, 575, 360, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
 
-            // Draw List Items inside Left Card Container
-            const auto& lockedApps = settings.lockedApps;
-            if (lockedApps.empty()) {
-                UIComponents::DrawEmptyState(graphics, 30, 100, 330, 310, L"No Protected Applications", L"Click '+ Add Application...' to protect your first app");
-            } else {
-                int itemY = 106;
-                for (size_t i = 0; i < lockedApps.size(); ++i) {
-                    if (itemY + 36 > 400) break;
-                    bool isSel = (g_selectedListIdx == (int)i);
-                    bool isHov = (g_hoverListIdx == (int)i);
-                    UIComponents::DrawCanvasListItem(graphics, 36, itemY, 318, 36, lockedApps[i], isSel, isHov);
-                    itemY += 40;
+                const auto& lockedApps = settings.lockedApps;
+                if (lockedApps.empty()) {
+                    UIComponents::DrawEmptyState(graphics, 235, 60, 575, 360, L"No Protected Applications", L"Click 'Add Application' or choose a quick preset below");
+                } else {
+                    int itemY = 70;
+                    for (size_t i = 0; i < lockedApps.size(); ++i) {
+                        if (itemY + 36 > 410) break;
+                        bool isSel = (g_selectedListIdx == (int)i);
+                        bool isHov = (g_hoverListIdx == (int)i);
+                        UIComponents::DrawCanvasListItem(graphics, 245, itemY, 555, 36, lockedApps[i], isSel, isHov, VectorIcon::Lock);
+                        itemY += 40;
+                    }
                 }
+
+                // Action Buttons
+                bool hovAdd = (g_hoverControlId == ID_CANVAS_BTN_ADD);
+                bool prsAdd = (g_pressedControlId == ID_CANVAS_BTN_ADD);
+                UIComponents::DrawCanvasButton(graphics, rcBtnAdd.left, rcBtnAdd.top, rcBtnAdd.right - rcBtnAdd.left, rcBtnAdd.bottom - rcBtnAdd.top,
+                    L"Add Application", ButtonVariant::Primary, hovAdd, prsAdd, VectorIcon::Plus);
+
+                bool hovRem = (g_hoverControlId == ID_CANVAS_BTN_REMOVE);
+                bool prsRem = (g_pressedControlId == ID_CANVAS_BTN_REMOVE);
+                UIComponents::DrawCanvasButton(graphics, rcBtnRemove.left, rcBtnRemove.top, rcBtnRemove.right - rcBtnRemove.left, rcBtnRemove.bottom - rcBtnRemove.top,
+                    L"Remove Application", ButtonVariant::Danger, hovRem, prsRem, VectorIcon::Trash);
+
+                // Quick Presets
+                bool hovP1 = (g_hoverControlId == ID_CANVAS_PRESET_NOTEPAD);
+                bool prsP1 = (g_pressedControlId == ID_CANVAS_PRESET_NOTEPAD);
+                UIComponents::DrawCanvasButton(graphics, rcPreset1.left, rcPreset1.top, rcPreset1.right - rcPreset1.left, rcPreset1.bottom - rcPreset1.top,
+                    L"Notepad", ButtonVariant::Secondary, hovP1, prsP1, VectorIcon::Document);
+
+                bool hovP2 = (g_hoverControlId == ID_CANVAS_PRESET_CHROME);
+                bool prsP2 = (g_pressedControlId == ID_CANVAS_PRESET_CHROME);
+                UIComponents::DrawCanvasButton(graphics, rcPreset2.left, rcPreset2.top, rcPreset2.right - rcPreset2.left, rcPreset2.bottom - rcPreset2.top,
+                    L"Google Chrome", ButtonVariant::Secondary, hovP2, prsP2, VectorIcon::Globe);
+
+                bool hovP3 = (g_hoverControlId == ID_CANVAS_PRESET_CMD);
+                bool prsP3 = (g_pressedControlId == ID_CANVAS_PRESET_CMD);
+                UIComponents::DrawCanvasButton(graphics, rcPreset3.left, rcPreset3.top, rcPreset3.right - rcPreset3.left, rcPreset3.bottom - rcPreset3.top,
+                    L"Terminal", ButtonVariant::Secondary, hovP3, prsP3, VectorIcon::Terminal);
+
+                bool hovP4 = (g_hoverControlId == ID_CANVAS_PRESET_CALC);
+                bool prsP4 = (g_pressedControlId == ID_CANVAS_PRESET_CALC);
+                UIComponents::DrawCanvasButton(graphics, rcPreset4.left, rcPreset4.top, rcPreset4.right - rcPreset4.left, rcPreset4.bottom - rcPreset4.top,
+                    L"Calculator", ButtonVariant::Secondary, hovP4, prsP4, VectorIcon::Calculator);
             }
+            // ================= PAGE 1: SECURITY & AUTH =================
+            else if (g_activeTab == TAB_SECURITY) {
+                RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
+                graphics.DrawString(L"Security & Authentication Options", -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
 
-            // Draw Action Capsule Buttons
-            bool hovAdd = (g_hoverControlId == ID_CANVAS_BTN_ADD);
-            bool prsAdd = (g_pressedControlId == ID_CANVAS_BTN_ADD);
-            UIComponents::DrawCanvasButton(graphics, 30, 420, 160, 38, L"+ Add Application...", ButtonVariant::Primary, hovAdd, prsAdd);
+                UIComponents::DrawCanvasCard(graphics, 235, 60, 575, 460, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
 
-            bool hovRem = (g_hoverControlId == ID_CANVAS_BTN_REMOVE);
-            bool prsRem = (g_pressedControlId == ID_CANVAS_BTN_REMOVE);
-            UIComponents::DrawCanvasButton(graphics, 200, 420, 160, 38, L"- Remove Selected", ButtonVariant::Danger, hovRem, prsRem);
+                bool hovT1 = (g_hoverControlId == ID_CANVAS_TOGGLE_ENABLE);
+                UIComponents::DrawCanvasToggle(graphics, rcToggleEnable.left, rcToggleEnable.top, rcToggleEnable.right - rcToggleEnable.left, rcToggleEnable.bottom - rcToggleEnable.top,
+                    L"Enable Application Protection Engine", settings.protectionEnabled, hovT1);
 
-            // Draw Quick Add Presets (Drawn width-aligned so "+ Calculator" fits on 1 line!)
-            bool hovQ1 = (g_hoverControlId == ID_CANVAS_PRESET_NOTEPAD);
-            bool prsQ1 = (g_pressedControlId == ID_CANVAS_PRESET_NOTEPAD);
-            UIComponents::DrawCanvasButton(graphics, 30, 468, 78, 28, L"+ Notepad", ButtonVariant::Secondary, hovQ1, prsQ1);
+                std::wstring winUserLabel = L"Allow Windows Password / PIN (" + SecurityManager::GetInstance().GetCurrentWindowsUsername() + L")";
+                bool hovT2 = (g_hoverControlId == ID_CANVAS_TOGGLE_WINAUTH);
+                UIComponents::DrawCanvasToggle(graphics, rcToggleWinAuth.left, rcToggleWinAuth.top, rcToggleWinAuth.right - rcToggleWinAuth.left, rcToggleWinAuth.bottom - rcToggleWinAuth.top,
+                    winUserLabel.c_str(), settings.useWindowsAuth, hovT2);
 
-            bool hovQ2 = (g_hoverControlId == ID_CANVAS_PRESET_CHROME);
-            bool prsQ2 = (g_pressedControlId == ID_CANVAS_PRESET_CHROME);
-            UIComponents::DrawCanvasButton(graphics, 114, 468, 76, 28, L"+ Chrome", ButtonVariant::Secondary, hovQ2, prsQ2);
+                bool hovT3 = (g_hoverControlId == ID_CANVAS_TOGGLE_CUSTOMPIN);
+                UIComponents::DrawCanvasToggle(graphics, rcToggleCustomPin.left, rcToggleCustomPin.top, rcToggleCustomPin.right - rcToggleCustomPin.left, rcToggleCustomPin.bottom - rcToggleCustomPin.top,
+                    L"Allow Custom Master Passcode", settings.useCustomPin, hovT3);
 
-            bool hovQ3 = (g_hoverControlId == ID_CANVAS_PRESET_CMD);
-            bool prsQ3 = (g_pressedControlId == ID_CANVAS_PRESET_CMD);
-            UIComponents::DrawCanvasButton(graphics, 196, 468, 78, 28, L"+ Terminal", ButtonVariant::Secondary, hovQ3, prsQ3);
+                bool hovSetPin = (g_hoverControlId == ID_CANVAS_BTN_SETPIN);
+                bool prsSetPin = (g_pressedControlId == ID_CANVAS_BTN_SETPIN);
+                UIComponents::DrawCanvasButton(graphics, rcBtnSetPin.left, rcBtnSetPin.top, rcBtnSetPin.right - rcBtnSetPin.left, rcBtnSetPin.bottom - rcBtnSetPin.top,
+                    L"Set Master Passcode...", ButtonVariant::Secondary, hovSetPin, prsSetPin, VectorIcon::Key);
 
-            bool hovQ4 = (g_hoverControlId == ID_CANVAS_PRESET_CALC);
-            bool prsQ4 = (g_pressedControlId == ID_CANVAS_PRESET_CALC);
-            UIComponents::DrawCanvasButton(graphics, 280, 468, 80, 28, L"+ Calculator", ButtonVariant::Secondary, hovQ4, prsQ4);
+                bool hovT4 = (g_hoverControlId == ID_CANVAS_TOGGLE_AUTOSTART);
+                UIComponents::DrawCanvasToggle(graphics, rcToggleAutoStart.left, rcToggleAutoStart.top, rcToggleAutoStart.right - rcToggleAutoStart.left, rcToggleAutoStart.bottom - rcToggleAutoStart.top,
+                    L"Launch automatically when Windows starts", settings.autoStartWithWindows, hovT4);
+            }
+            // ================= PAGE 2: AUDIT LOGS =================
+            else if (g_activeTab == TAB_LOGS) {
+                RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
+                graphics.DrawString(L"Security Audit Trails", -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
 
-            // 5. Draw Right macOS Settings Group Card Container (#202024)
-            RectF rightHeadRect(395.0f, 70.0f, 355.0f, 24.0f);
-            graphics.DrawString(L"Passcode \x0026 Security Options", -1, &headerFont, rightHeadRect, &formatLeft, &whiteBrush);
+                UIComponents::DrawCanvasCard(graphics, 235, 60, 575, 400, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
 
-            UIComponents::DrawCanvasCard(graphics, 395, 100, 355, 396, Color(255, 32, 32, 36), Color(255, 255, 255, 18), 12);
+                auto logLines = GetRecentAuditLogs(9);
+                if (logLines.empty()) {
+                    UIComponents::DrawEmptyState(graphics, 235, 60, 575, 400, L"No Audit Events Logged", L"All security operations will be tracked here in real-time");
+                } else {
+                    Font fontMono(pTextFam, 8.5f, FontStyleRegular, UnitPoint);
+                    int logY = 75;
+                    for (const auto& logEntry : logLines) {
+                        RectF logRect(250.0f, (REAL)logY, 545.0f, 32.0f);
+                        graphics.DrawString(logEntry.c_str(), -1, &fontMono, logRect, &formatLeft, &mutedBrush);
+                        logY += 36;
+                    }
+                }
 
-            // Draw 4 macOS Sliding Pill Toggle Switches
-            bool hovT1 = (g_hoverControlId == ID_CANVAS_TOGGLE_ENABLE);
-            UIComponents::DrawCanvasToggle(graphics, 415, 120, 320, 34, L"Enable App Protection Engine", settings.protectionEnabled, hovT1);
+                bool hovOpenLog = (g_hoverControlId == ID_CANVAS_BTN_OPENLOG);
+                bool prsOpenLog = (g_pressedControlId == ID_CANVAS_BTN_OPENLOG);
+                UIComponents::DrawCanvasButton(graphics, rcBtnOpenLog.left, rcBtnOpenLog.top, rcBtnOpenLog.right - rcBtnOpenLog.left, rcBtnOpenLog.bottom - rcBtnOpenLog.top,
+                    L"Open Complete Audit Log File", ButtonVariant::Secondary, hovOpenLog, prsOpenLog, VectorIcon::Logs);
+            }
+            // ================= PAGE 3: ABOUT SURAKSHA =================
+            else if (g_activeTab == TAB_ABOUT) {
+                RectF headRect(235.0f, 16.0f, 400.0f, 28.0f);
+                graphics.DrawString(L"About Suraksha", -1, &pageHeadFont, headRect, &formatLeft, &whiteBrush);
 
-            std::wstring winUserLabel = L"Allow Windows Password (" + SecurityManager::GetInstance().GetCurrentWindowsUsername() + L")";
-            bool hovT2 = (g_hoverControlId == ID_CANVAS_TOGGLE_WINAUTH);
-            UIComponents::DrawCanvasToggle(graphics, 415, 175, 320, 34, winUserLabel.c_str(), settings.useWindowsAuth, hovT2);
+                UIComponents::DrawCanvasCard(graphics, 235, 60, 575, 460, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
 
-            bool hovT3 = (g_hoverControlId == ID_CANVAS_TOGGLE_CUSTOMPIN);
-            UIComponents::DrawCanvasToggle(graphics, 415, 230, 320, 34, L"Allow Custom Master Passcode", settings.useCustomPin, hovT3);
+                // App Branding Logo
+                UIComponents::DrawAppLogo(graphics, 495, 80, 54);
 
-            bool hovSetPin = (g_hoverControlId == ID_CANVAS_BTN_SETPIN);
-            bool prsSetPin = (g_pressedControlId == ID_CANVAS_BTN_SETPIN);
-            UIComponents::DrawCanvasButton(graphics, 415, 280, 310, 38, L"Set / Change Master Passcode...", ButtonVariant::Secondary, hovSetPin, prsSetPin);
+                StringFormat formatCenter;
+                formatCenter.SetAlignment(StringAlignmentCenter);
+                formatCenter.SetLineAlignment(StringAlignmentCenter);
 
-            bool hovT4 = (g_hoverControlId == ID_CANVAS_TOGGLE_AUTOSTART);
-            UIComponents::DrawCanvasToggle(graphics, 415, 335, 320, 34, L"Launch automatically at system login", settings.autoStartWithWindows, hovT4);
+                RectF titleRc(250.0f, 142.0f, 545.0f, 26.0f);
+                graphics.DrawString(L"Suraksha - Privacy & Security (v2.0)", -1, &pageHeadFont, titleRc, &formatCenter, &whiteBrush);
+
+                RectF yabpRc(250.0f, 172.0f, 545.0f, 22.0f);
+                graphics.DrawString(L"A YABP Initiative (Yet Another Boring Project)", -1, &sectionFont, yabpRc, &formatCenter, &blueBrush);
+
+                RectF devRc(250.0f, 200.0f, 545.0f, 20.0f);
+                graphics.DrawString(L"Developed by Dheeraz", -1, &bodyFont, devRc, &formatCenter, &whiteBrush);
+
+                // GPLv3 License Box
+                UIComponents::DrawCanvasCard(graphics, 255, 235, 535, 210, Color(255, 34, 34, 38), Color(18, 255, 255, 255), 10);
+
+                RectF licHeadRc(275.0f, 248.0f, 495.0f, 22.0f);
+                graphics.DrawString(L"GNU General Public License v3.0 (GPLv3)", -1, &sectionFont, licHeadRc, &formatLeft, &whiteBrush);
+
+                std::wstring fullLicDesc = L"This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 3 of the License.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.";
+                RectF licBodyRc(275.0f, 278.0f, 495.0f, 140.0f);
+                graphics.DrawString(fullLicDesc.c_str(), -1, &bodyFont, licBodyRc, &formatLeft, &mutedBrush);
+
+                // Action Buttons
+                bool hovY = (g_hoverControlId == ID_CANVAS_BTN_YABP);
+                bool prsY = (g_pressedControlId == ID_CANVAS_BTN_YABP);
+                UIComponents::DrawCanvasButton(graphics, rcBtnYABP.left, rcBtnYABP.top, rcBtnYABP.right - rcBtnYABP.left, rcBtnYABP.bottom - rcBtnYABP.top,
+                    L"Visit YABP Site", ButtonVariant::Primary, hovY, prsY, VectorIcon::ExternalLink);
+
+                bool hovD = (g_hoverControlId == ID_CANVAS_BTN_DEV);
+                bool prsD = (g_pressedControlId == ID_CANVAS_BTN_DEV);
+                UIComponents::DrawCanvasButton(graphics, rcBtnDev.left, rcBtnDev.top, rcBtnDev.right - rcBtnDev.left, rcBtnDev.bottom - rcBtnDev.top,
+                    L"Developer Site", ButtonVariant::Secondary, hovD, prsD, VectorIcon::ExternalLink);
+
+                bool hovG = (g_hoverControlId == ID_CANVAS_BTN_GITHUB);
+                bool prsG = (g_pressedControlId == ID_CANVAS_BTN_GITHUB);
+                UIComponents::DrawCanvasButton(graphics, rcBtnGithub.left, rcBtnGithub.top, rcBtnGithub.right - rcBtnGithub.left, rcBtnGithub.bottom - rcBtnGithub.top,
+                    L"View Source Code", ButtonVariant::Secondary, hovG, prsG, VectorIcon::ExternalLink);
+            }
         }
 
-        // Direct Blit to screen
+        // Direct Blit onto monitor
         BitBlt(hdc, 0, 0, winW, winH, memDC, 0, 0, SRCCOPY);
 
         SelectObject(memDC, hOldBmp);
