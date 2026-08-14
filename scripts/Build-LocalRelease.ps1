@@ -93,8 +93,12 @@ if ($signtool) {
     }
 }
 
-# Copy standalone exe to dist
+# Copy standalone exe and assets to dist
 Copy-Item "x64\Release\Suraksha.exe" -Destination "$OutputDir\Suraksha.exe" -Force
+if (Test-Path "assets") {
+    Copy-Item "assets" -Destination "$OutputDir\assets" -Recurse -Force
+    Copy-Item "assets" -Destination "x64\Release\assets" -Recurse -Force
+}
 Write-Host "[OK] Suraksha.exe signed and placed in $OutputDir/" -ForegroundColor Green
 
 # 4. Build & Sign MSIX Modern Windows App Package
@@ -106,6 +110,9 @@ New-Item -ItemType Directory -Force -Path "$stageDir\Assets" | Out-Null
 Copy-Item "x64\Release\Suraksha.exe" -Destination "$stageDir\Suraksha.exe" -Force
 Copy-Item "packaging\AppxManifest.xml" -Destination "$stageDir\AppxManifest.xml" -Force
 Copy-Item "packaging\Assets\*" -Destination "$stageDir\Assets\" -Force
+if (Test-Path "assets") {
+    Copy-Item "assets" -Destination "$stageDir\assets" -Recurse -Force
+}
 
 # Match publisher in manifest to certificate
 try {

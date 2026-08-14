@@ -11,6 +11,7 @@
 #include "AuditLogger.h"
 #include "UpdateManager.h"
 #include "LanguageManager.h"
+#include "FontManager.h"
 
 #include <windowsx.h>
 #include <commctrl.h>
@@ -102,7 +103,9 @@ WCHAR szTitle[MAX_LOADSTRING];
 WCHAR szWindowClass[MAX_LOADSTRING];
 HWND g_hWndMain = NULL;
 UINT_PTR g_nTimerID = 1001;
+UINT_PTR g_nSpinnerTimerID = 1002;
 ULONG_PTR g_gdiplusToken = 0;
+static float g_spinAngle = 0.0f;
 
 // Interactive Canvas State
 int g_activeTab = TAB_APPLOCKER;
@@ -1240,16 +1243,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 return 0;
             }
             if (PtInRectStruct(rcBtnCheckUpdate, x, y)) {
+                g_spinAngle = 0.0f;
+                SetTimer(hWnd, g_nSpinnerTimerID, 33, NULL);
                 UpdateManager::GetInstance().CheckForUpdatesAsync(true);
+                InvalidateRect(hWnd, NULL, FALSE);
                 return 0;
             }
             if (PtInRectStruct(rcRadioStable, x, y)) {
                 UpdateManager::GetInstance().SetChannel(L"stable");
+                g_spinAngle = 0.0f;
+                SetTimer(hWnd, g_nSpinnerTimerID, 33, NULL);
                 InvalidateRect(hWnd, NULL, FALSE);
                 return 0;
             }
             if (PtInRectStruct(rcRadioBeta, x, y)) {
                 UpdateManager::GetInstance().SetChannel(L"beta");
+                g_spinAngle = 0.0f;
+                SetTimer(hWnd, g_nSpinnerTimerID, 33, NULL);
                 InvalidateRect(hWnd, NULL, FALSE);
                 return 0;
             }
@@ -1315,6 +1325,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
     case WM_TIMER: {
         if (wParam == g_nTimerID) {
             AppLockEngine::GetInstance().PeriodicCheck();
+        } else if (wParam == g_nSpinnerTimerID) {
+            if (UpdateManager::GetInstance().GetStatus() == UpdateStatus::Checking) {
+                g_spinAngle += 15.0f;
+                if (g_spinAngle >= 360.0f) g_spinAngle -= 360.0f;
+                InvalidateRect(hWnd, NULL, FALSE);
+            } else {
+                KillTimer(hWnd, g_nSpinnerTimerID);
+                g_spinAngle = 0.0f;
+                InvalidateRect(hWnd, NULL, FALSE);
+            }
         }
         return 0;
     }
@@ -1397,18 +1417,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // Sidebar Logo + Brand Title
             UIComponents::DrawAppLogo(graphics, 20, 52, 22);
 
-            // Premium Modern Typography Stack with Segoe UI Variable fallback
-            FontFamily fontFamDisplay(L"Segoe UI Variable Display");
-            FontFamily fontFamText(L"Segoe UI Variable Text");
-            FontFamily fontFamFallback(L"Segoe UI");
+            // Premium Modern Typography Stack with Inter / Segoe UI Variable fallback
+            FontManager::GetInstance().Initialize();
+            const FontFamily* pDisplayFam = FontManager::GetInstance().GetDisplayFamily();
+            const FontFamily* pTextFam = FontManager::GetInstance().GetTextFamily();
 
-            const FontFamily* pDisplayFam = fontFamDisplay.IsAvailable() ? &fontFamDisplay : &fontFamFallback;
-            const FontFamily* pTextFam = fontFamText.IsAvailable() ? &fontFamText : &fontFamFallback;
-
-            Font brandFont(pDisplayFam, 12.5f, FontStyleBold, UnitPoint);
-            Font pageHeadFont(pDisplayFam, 14.5f, FontStyleBold, UnitPoint);
-            Font sectionFont(pDisplayFam, 11.0f, FontStyleBold, UnitPoint);
-            Font bodyFont(pTextFam, 9.5f, FontStyleRegular, UnitPoint);
+            Font brandFont(pDisplayFam, 13.5f, FontStyleBold, UnitPoint);
+            Font pageHeadFont(pDisplayFam, 16.0f, FontStyleBold, UnitPoint);
+            Font sectionFont(pDisplayFam, 12.0f, FontStyleBold, UnitPoint);
+            Font bodyFont(pTextFam, 10.5f, FontStyleRegular, UnitPoint);
+            Font bodyBoldFont(pTextFam, 10.5f, FontStyleBold, UnitPoint);
 
             SolidBrush whiteBrush(Color(255, 248, 250, 252));
             SolidBrush mutedBrush(Color(255, 148, 163, 184));
@@ -1482,26 +1500,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 UIComponents::DrawCanvasButton(graphics, rcBtnRemove.left, rcBtnRemove.top, rcBtnRemove.right - rcBtnRemove.left, rcBtnRemove.bottom - rcBtnRemove.top,
                     LanguageManager::GetInstance().GetString(L"REMOVE_APP"), ButtonVariant::Danger, hovRem, prsRem, VectorIcon::Trash);
 
-                // Quick Presets
+                // Quick Presets (Clean text-only pill buttons)
                 bool hovP1 = (g_hoverControlId == ID_CANVAS_PRESET_NOTEPAD);
                 bool prsP1 = (g_pressedControlId == ID_CANVAS_PRESET_NOTEPAD);
                 UIComponents::DrawCanvasButton(graphics, rcPreset1.left, rcPreset1.top, rcPreset1.right - rcPreset1.left, rcPreset1.bottom - rcPreset1.top,
-                    L"Notepad", ButtonVariant::Secondary, hovP1, prsP1, VectorIcon::Document);
+                    L"Notepad", ButtonVariant::Secondary, hovP1, prsP1, VectorIcon::None);
 
                 bool hovP2 = (g_hoverControlId == ID_CANVAS_PRESET_CHROME);
                 bool prsP2 = (g_pressedControlId == ID_CANVAS_PRESET_CHROME);
                 UIComponents::DrawCanvasButton(graphics, rcPreset2.left, rcPreset2.top, rcPreset2.right - rcPreset2.left, rcPreset2.bottom - rcPreset2.top,
-                    L"Google Chrome", ButtonVariant::Secondary, hovP2, prsP2, VectorIcon::Globe);
+                    L"Google Chrome", ButtonVariant::Secondary, hovP2, prsP2, VectorIcon::None);
 
                 bool hovP3 = (g_hoverControlId == ID_CANVAS_PRESET_CMD);
                 bool prsP3 = (g_pressedControlId == ID_CANVAS_PRESET_CMD);
                 UIComponents::DrawCanvasButton(graphics, rcPreset3.left, rcPreset3.top, rcPreset3.right - rcPreset3.left, rcPreset3.bottom - rcPreset3.top,
-                    L"Terminal", ButtonVariant::Secondary, hovP3, prsP3, VectorIcon::Terminal);
+                    L"Terminal", ButtonVariant::Secondary, hovP3, prsP3, VectorIcon::None);
 
                 bool hovP4 = (g_hoverControlId == ID_CANVAS_PRESET_CALC);
                 bool prsP4 = (g_pressedControlId == ID_CANVAS_PRESET_CALC);
                 UIComponents::DrawCanvasButton(graphics, rcPreset4.left, rcPreset4.top, rcPreset4.right - rcPreset4.left, rcPreset4.bottom - rcPreset4.top,
-                    L"Calculator", ButtonVariant::Secondary, hovP4, prsP4, VectorIcon::Calculator);
+                    L"Calculator", ButtonVariant::Secondary, hovP4, prsP4, VectorIcon::None);
             }
             // ================= PAGE 1: SECURITY & AUTH =================
             else if (g_activeTab == TAB_SECURITY) {
@@ -1511,75 +1529,76 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 // --- Card 1: Primary Authentication Options ---
                 UIComponents::DrawCanvasCard(graphics, 235, 52, 575, 142, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 12);
 
-                bool hovT1 = (g_hoverControlId == ID_CANVAS_TOGGLE_ENABLE);
-                UIComponents::DrawCanvasToggle(graphics, rcToggleEnable.left, rcToggleEnable.top, rcToggleEnable.right - rcToggleEnable.left, rcToggleEnable.bottom - rcToggleEnable.top,
-                    L"Enable Application Protection Engine", settings.protectionEnabled, hovT1);
+                RectF authTitleRc(255.0f, 66.0f, 500.0f, 20.0f);
+                graphics.DrawString(L"Primary Authentication Methods", -1, &sectionFont, authTitleRc, &formatLeft, &whiteBrush);
 
-                std::wstring winUserLabel = L"Windows Password / PIN (" + SecurityManager::GetInstance().GetCurrentWindowsUsername() + L")";
-                bool hovT2 = (g_hoverControlId == ID_CANVAS_TOGGLE_WINAUTH);
+                bool hovWin = (g_hoverControlId == ID_CANVAS_TOGGLE_WINAUTH);
                 UIComponents::DrawCanvasToggle(graphics, rcToggleWinAuth.left, rcToggleWinAuth.top, rcToggleWinAuth.right - rcToggleWinAuth.left, rcToggleWinAuth.bottom - rcToggleWinAuth.top,
-                    winUserLabel.c_str(), settings.useWindowsAuth, hovT2);
+                    L"Windows Hello (Biometrics & PIN)", settings.useWindowsAuth, hovWin);
 
-                bool hovT3 = (g_hoverControlId == ID_CANVAS_TOGGLE_CUSTOMPIN);
+                bool hovCust = (g_hoverControlId == ID_CANVAS_TOGGLE_CUSTOMPIN);
                 UIComponents::DrawCanvasToggle(graphics, rcToggleCustomPin.left, rcToggleCustomPin.top, rcToggleCustomPin.right - rcToggleCustomPin.left, rcToggleCustomPin.bottom - rcToggleCustomPin.top,
-                    L"Custom Master Passcode", settings.useCustomPin, hovT3);
+                    L"Custom Master Passcode", settings.useCustomPin, hovCust);
 
                 bool hovSetPin = (g_hoverControlId == ID_CANVAS_BTN_SETPIN);
                 bool prsSetPin = (g_pressedControlId == ID_CANVAS_BTN_SETPIN);
                 UIComponents::DrawCanvasButton(graphics, rcBtnSetPin.left, rcBtnSetPin.top, rcBtnSetPin.right - rcBtnSetPin.left, rcBtnSetPin.bottom - rcBtnSetPin.top,
-                    L"Set Master Passcode...", ButtonVariant::Secondary, hovSetPin, prsSetPin, VectorIcon::Key);
-
-                bool hovT4 = (g_hoverControlId == ID_CANVAS_TOGGLE_AUTOSTART);
-                UIComponents::DrawCanvasToggle(graphics, rcToggleAutoStart.left, rcToggleAutoStart.top, rcToggleAutoStart.right - rcToggleAutoStart.left, rcToggleAutoStart.bottom - rcToggleAutoStart.top,
-                    L"Start with Windows", settings.autoStartWithWindows, hovT4);
+                    SecurityManager::GetInstance().HasCustomPin() ? L"Change Passcode" : L"Set Master Passcode",
+                    ButtonVariant::Secondary, hovSetPin, prsSetPin, VectorIcon::Key);
 
                 // --- Card 2: Scheduled Protection (Active Hours) ---
-                UIComponents::DrawCanvasCard(graphics, 235, 204, 575, 126, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 12);
+                UIComponents::DrawCanvasCard(graphics, 235, 204, 575, 138, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 12);
 
-                bool hovSchedTog = (g_hoverControlId == ID_CANVAS_TOGGLE_SCHEDULE);
+                RectF schedTitleRc(255.0f, 216.0f, 500.0f, 20.0f);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"SCHEDULE_PROTECTION").c_str(), -1, &sectionFont, schedTitleRc, &formatLeft, &whiteBrush);
+
+                bool hovSched = (g_hoverControlId == ID_CANVAS_TOGGLE_SCHEDULE);
                 UIComponents::DrawCanvasToggle(graphics, rcToggleSchedule.left, rcToggleSchedule.top, rcToggleSchedule.right - rcToggleSchedule.left, rcToggleSchedule.bottom - rcToggleSchedule.top,
-                    LanguageManager::GetInstance().GetString(L"SCHEDULE_ENABLE"), settings.scheduleEnabled, hovSchedTog);
+                    LanguageManager::GetInstance().GetString(L"SCHEDULE_ENABLE"), settings.scheduleEnabled, hovSched);
 
-                // Start Hour Stepper
-                RectF sLblRc(255.0f, 282.0f, 105.0f, 32.0f);
-                graphics.DrawString(LanguageManager::GetInstance().GetString(L"SCHEDULE_START").c_str(), -1, &bodyFont, sLblRc, &formatLeft, &mutedBrush);
+                // Stepper Controls
+                RectF startLblRc((REAL)rcSchedStartDec.left, (REAL)(rcSchedStartDec.top - 18), 120.0f, 16.0f);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"SCHEDULE_START").c_str(), -1, &bodyFont, startLblRc, &formatLeft, &mutedBrush);
 
-                bool hovSDec = (g_hoverControlId == ID_CANVAS_BTN_SCHED_S_DEC);
-                UIComponents::DrawCanvasButton(graphics, rcSchedStartDec.left, rcSchedStartDec.top, rcSchedStartDec.right - rcSchedStartDec.left, rcSchedStartDec.bottom - rcSchedStartDec.top,
-                    L"-", ButtonVariant::Secondary, hovSDec, false);
+                bool hovS1 = (g_hoverControlId == ID_CANVAS_BTN_SCHED_S_DEC);
+                bool prsS1 = (g_pressedControlId == ID_CANVAS_BTN_SCHED_S_DEC);
+                UIComponents::DrawCanvasButton(graphics, rcSchedStartDec.left, rcSchedStartDec.top, 36, 34, L"-", ButtonVariant::Secondary, hovS1, prsS1);
 
-                std::wstring sValStr = FormatHour(settings.scheduleStartHour);
-                RectF sValRc((REAL)rcSchedStartDec.right, 280.0f, (REAL)(rcSchedStartInc.left - rcSchedStartDec.right), 32.0f);
-                StringFormat fmtCenter; fmtCenter.SetAlignment(StringAlignmentCenter); fmtCenter.SetLineAlignment(StringAlignmentCenter);
-                graphics.DrawString(sValStr.c_str(), -1, &sectionFont, sValRc, &fmtCenter, &whiteBrush);
+                wchar_t startBuf[32];
+                swprintf_s(startBuf, 32, L"%02d:00", settings.scheduleStartHour);
+                RectF startValRc((REAL)(rcSchedStartDec.left + 36), (REAL)rcSchedStartDec.top, 56.0f, 34.0f);
+                StringFormat fmtVal;
+                fmtVal.SetAlignment(StringAlignmentCenter);
+                fmtVal.SetLineAlignment(StringAlignmentCenter);
+                graphics.DrawString(startBuf, -1, &sectionFont, startValRc, &fmtVal, &whiteBrush);
 
-                bool hovSInc = (g_hoverControlId == ID_CANVAS_BTN_SCHED_S_INC);
-                UIComponents::DrawCanvasButton(graphics, rcSchedStartInc.left, rcSchedStartInc.top, rcSchedStartInc.right - rcSchedStartInc.left, rcSchedStartInc.bottom - rcSchedStartInc.top,
-                    L"+", ButtonVariant::Secondary, hovSInc, false);
+                bool hovS2 = (g_hoverControlId == ID_CANVAS_BTN_SCHED_S_INC);
+                bool prsS2 = (g_pressedControlId == ID_CANVAS_BTN_SCHED_S_INC);
+                UIComponents::DrawCanvasButton(graphics, rcSchedStartInc.left, rcSchedStartInc.top, 36, 34, L"+", ButtonVariant::Secondary, hovS2, prsS2);
 
-                // End Hour Stepper
-                RectF eLblRc(535.0f, 282.0f, 100.0f, 32.0f);
-                graphics.DrawString(LanguageManager::GetInstance().GetString(L"SCHEDULE_END").c_str(), -1, &bodyFont, eLblRc, &formatLeft, &mutedBrush);
+                RectF endLblRc((REAL)rcSchedEndDec.left, (REAL)(rcSchedEndDec.top - 18), 120.0f, 16.0f);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"SCHEDULE_END").c_str(), -1, &bodyFont, endLblRc, &formatLeft, &mutedBrush);
 
-                bool hovEDec = (g_hoverControlId == ID_CANVAS_BTN_SCHED_E_DEC);
-                UIComponents::DrawCanvasButton(graphics, rcSchedEndDec.left, rcSchedEndDec.top, rcSchedEndDec.right - rcSchedEndDec.left, rcSchedEndDec.bottom - rcSchedEndDec.top,
-                    L"-", ButtonVariant::Secondary, hovEDec, false);
+                bool hovE1 = (g_hoverControlId == ID_CANVAS_BTN_SCHED_E_DEC);
+                bool prsE1 = (g_pressedControlId == ID_CANVAS_BTN_SCHED_E_DEC);
+                UIComponents::DrawCanvasButton(graphics, rcSchedEndDec.left, rcSchedEndDec.top, 36, 34, L"-", ButtonVariant::Secondary, hovE1, prsE1);
 
-                std::wstring eValStr = FormatHour(settings.scheduleEndHour);
-                RectF eValRc((REAL)rcSchedEndDec.right, 280.0f, (REAL)(rcSchedEndInc.left - rcSchedEndDec.right), 32.0f);
-                graphics.DrawString(eValStr.c_str(), -1, &sectionFont, eValRc, &fmtCenter, &whiteBrush);
+                wchar_t endBuf[32];
+                swprintf_s(endBuf, 32, L"%02d:00", settings.scheduleEndHour);
+                RectF endValRc((REAL)(rcSchedEndDec.left + 36), (REAL)rcSchedEndDec.top, 56.0f, 34.0f);
+                graphics.DrawString(endBuf, -1, &sectionFont, endValRc, &fmtVal, &whiteBrush);
 
-                bool hovEInc = (g_hoverControlId == ID_CANVAS_BTN_SCHED_E_INC);
-                UIComponents::DrawCanvasButton(graphics, rcSchedEndInc.left, rcSchedEndInc.top, rcSchedEndInc.right - rcSchedEndInc.left, rcSchedEndInc.bottom - rcSchedEndInc.top,
-                    L"+", ButtonVariant::Secondary, hovEInc, false);
+                bool hovE2 = (g_hoverControlId == ID_CANVAS_BTN_SCHED_E_INC);
+                bool prsE2 = (g_pressedControlId == ID_CANVAS_BTN_SCHED_E_INC);
+                UIComponents::DrawCanvasButton(graphics, rcSchedEndInc.left, rcSchedEndInc.top, 36, 34, L"+", ButtonVariant::Secondary, hovE2, prsE2);
 
-                // --- Card 3: Enterprise Policy & Backup ---
-                UIComponents::DrawCanvasCard(graphics, 235, 340, 575, 130, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 12);
+                // --- Card 3: Enterprise Policy Export / Import (AES-256) ---
+                UIComponents::DrawCanvasCard(graphics, 235, 352, 575, 118, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 12);
 
-                RectF polHeadRc(255.0f, 350.0f, 535.0f, 22.0f);
-                graphics.DrawString(LanguageManager::GetInstance().GetString(L"POLICY_ENTERPRISE").c_str(), -1, &sectionFont, polHeadRc, &formatLeft, &whiteBrush);
+                RectF polTitleRc(255.0f, 364.0f, 500.0f, 20.0f);
+                graphics.DrawString(LanguageManager::GetInstance().GetString(L"POLICY_ENTERPRISE").c_str(), -1, &sectionFont, polTitleRc, &formatLeft, &whiteBrush);
 
-                RectF polDescRc(255.0f, 374.0f, 535.0f, 32.0f);
+                RectF polDescRc(255.0f, 386.0f, 535.0f, 18.0f);
                 graphics.DrawString(LanguageManager::GetInstance().GetString(L"POLICY_DESC").c_str(), -1, &bodyFont, polDescRc, &formatLeft, &mutedBrush);
 
                 bool hovExp = (g_hoverControlId == ID_CANVAS_BTN_EXPORT_POL);
@@ -1591,6 +1610,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 bool prsImp = (g_pressedControlId == ID_CANVAS_BTN_IMPORT_POL);
                 UIComponents::DrawCanvasButton(graphics, rcBtnImportPolicy.left, rcBtnImportPolicy.top, rcBtnImportPolicy.right - rcBtnImportPolicy.left, rcBtnImportPolicy.bottom - rcBtnImportPolicy.top,
                     LanguageManager::GetInstance().GetString(L"POLICY_IMPORT"), ButtonVariant::Secondary, hovImp, prsImp, VectorIcon::Import);
+
+                // Auto-start switch
+                bool hovAuto = (g_hoverControlId == ID_CANVAS_TOGGLE_AUTOSTART);
+                UIComponents::DrawCanvasToggle(graphics, rcToggleAutoStart.left, rcToggleAutoStart.top, rcToggleAutoStart.right - rcToggleAutoStart.left, rcToggleAutoStart.bottom - rcToggleAutoStart.top,
+                    L"Start Suraksha automatically with Windows", settings.autoStartWithWindows, hovAuto);
             }
             // ================= PAGE 2: SOFTWARE UPDATE (macOS Style) =================
             else if (g_activeTab == TAB_UPDATES) {
@@ -1630,8 +1654,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     iconColor = Color(255, 255, 69, 58);
                 }
 
+                if (status == UpdateStatus::Checking) {
+                    SetTimer(hWnd, g_nSpinnerTimerID, 33, NULL);
+                }
+
                 UIComponents::DrawCanvasCard(graphics, emblemX, emblemY, 52, 52, emblemBg, Color(30, 255, 255, 255), 14);
-                if (emblemIcon == VectorIcon::Check) UIComponents::DrawIconCheck(graphics, emblemX + 16, emblemY + 16, 20, iconColor);
+                if (status == UpdateStatus::Checking) {
+                    GraphicsState gState = graphics.Save();
+                    graphics.TranslateTransform((REAL)(emblemX + 26), (REAL)(emblemY + 26));
+                    graphics.RotateTransform(g_spinAngle);
+                    graphics.TranslateTransform(-(REAL)(emblemX + 26), -(REAL)(emblemY + 26));
+                    UIComponents::DrawIconUpdate(graphics, emblemX + 15, emblemY + 15, 22, iconColor);
+                    graphics.Restore(gState);
+                } else if (emblemIcon == VectorIcon::Check) UIComponents::DrawIconCheck(graphics, emblemX + 16, emblemY + 16, 20, iconColor);
                 else if (emblemIcon == VectorIcon::Download) UIComponents::DrawIconDownload(graphics, emblemX + 16, emblemY + 16, 20, iconColor);
                 else if (emblemIcon == VectorIcon::Warning) UIComponents::DrawIconWarning(graphics, emblemX + 16, emblemY + 16, 20, iconColor);
                 else UIComponents::DrawIconUpdate(graphics, emblemX + 16, emblemY + 16, 20, iconColor);
@@ -1761,16 +1796,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
                 UIComponents::DrawCanvasCard(graphics, 235, 60, 575, 400, Color(255, 26, 26, 30), Color(18, 255, 255, 255), 14);
 
-                auto logLines = GetRecentAuditLogs(9);
+                auto logLines = GetRecentAuditLogs(6);
                 if (logLines.empty()) {
                     UIComponents::DrawEmptyState(graphics, 235, 60, 575, 400, L"No Audit Events Logged", L"All security operations will be tracked here in real-time");
                 } else {
                     Font fontMono(pTextFam, 8.5f, FontStyleRegular, UnitPoint);
-                    int logY = 75;
+                    int logY = 72;
                     for (const auto& logEntry : logLines) {
-                        RectF logRect(250.0f, (REAL)logY, 545.0f, 32.0f);
+                        UIComponents::DrawCanvasCard(graphics, 248, logY, 549, 48, Color(255, 32, 32, 36), Color(15, 255, 255, 255), 6);
+                        RectF logRect(258.0f, (REAL)(logY + 4), 530.0f, 40.0f);
                         graphics.DrawString(logEntry.c_str(), -1, &fontMono, logRect, &formatLeft, &mutedBrush);
-                        logY += 36;
+                        logY += 54;
                     }
                 }
 
@@ -1806,22 +1842,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 graphics.DrawString(LanguageManager::GetInstance().GetString(L"LANGUAGE_SECTION").c_str(), -1, &sectionFont, langHeadRc, &formatLeft, &whiteBrush);
 
                 int curLang = settings.language;
-                auto DrawLangBtn = [&](const RECT& r, const wchar_t* name, int langId, int cId) {
+                auto DrawLangBtn = [&](const RECT& r, const wchar_t* name, int langId, int cId, const FontFamily* pFam) {
                     bool isSel = (curLang == langId);
                     bool isHov = (g_hoverControlId == cId);
                     Color bColor = isSel ? Color(255, 10, 132, 255) : (isHov ? Color(255, 55, 55, 62) : Color(255, 42, 42, 46));
                     Color brdColor = isSel ? Color(255, 10, 132, 255) : Color(30, 255, 255, 255);
                     UIComponents::DrawCanvasCard(graphics, r.left, r.top, r.right - r.left, r.bottom - r.top, bColor, brdColor, 8);
+                    Font btnFont(pFam ? pFam : pTextFam, 10.0f, FontStyleRegular, UnitPoint);
                     RectF rF((REAL)r.left, (REAL)r.top, (REAL)(r.right - r.left), (REAL)(r.bottom - r.top));
-                    graphics.DrawString(name, -1, &bodyFont, rF, &formatCenter, isSel ? &whiteBrush : &mutedBrush);
+                    graphics.DrawString(name, -1, &btnFont, rF, &formatCenter, isSel ? &whiteBrush : &mutedBrush);
                 };
 
-                DrawLangBtn(rcLangEN, L"English", 0, ID_CANVAS_LANG_EN);
-                DrawLangBtn(rcLangHI, L"\x0939\x093F\x0928\x094D\x0926\x0940 (Hindi)", 1, ID_CANVAS_LANG_HI);
-                DrawLangBtn(rcLangES, L"Espa\x00F1ol (Spanish)", 2, ID_CANVAS_LANG_ES);
-                DrawLangBtn(rcLangDE, L"Deutsch (German)", 3, ID_CANVAS_LANG_DE);
-                DrawLangBtn(rcLangFR, L"Fran\x00E7ais (French)", 4, ID_CANVAS_LANG_FR);
-                DrawLangBtn(rcLangJA, L"\x65E5\x672C\x8A9E (Japanese)", 5, ID_CANVAS_LANG_JA);
+                const FontFamily* pHindiFam = FontManager::GetInstance().GetHindiFamily();
+                const FontFamily* pJapaneseFam = FontManager::GetInstance().GetJapaneseFamily();
+
+                DrawLangBtn(rcLangEN, L"English", 0, ID_CANVAS_LANG_EN, pTextFam);
+                DrawLangBtn(rcLangHI, L"\x0939\x093F\x0928\x094D\x0926\x094D\x0940 (Hindi)", 1, ID_CANVAS_LANG_HI, pHindiFam);
+                DrawLangBtn(rcLangES, L"Espa\x00F1ol (Spanish)", 2, ID_CANVAS_LANG_ES, pTextFam);
+                DrawLangBtn(rcLangDE, L"Deutsch (German)", 3, ID_CANVAS_LANG_DE, pTextFam);
+                DrawLangBtn(rcLangFR, L"Fran\x00E7ais (French)", 4, ID_CANVAS_LANG_FR, pTextFam);
+                DrawLangBtn(rcLangJA, L"\x65E5\x672C\x8A9E (Japanese)", 5, ID_CANVAS_LANG_JA, pJapaneseFam);
 
                 // GPLv3 License Box
                 UIComponents::DrawCanvasCard(graphics, 250, 280, 545, 138, Color(255, 34, 34, 38), Color(18, 255, 255, 255), 10);

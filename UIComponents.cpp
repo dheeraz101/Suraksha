@@ -1,36 +1,7 @@
 #include "UIComponents.h"
-
-// ═══════════════════════════════════════════════════════════════
-// Windows Segoe MDL2 Assets Icon Font Renderer
-// High-quality, pixel-perfect, anti-aliased native Windows icons
-// ═══════════════════════════════════════════════════════════════
-
-static void DrawMDL2Glyph(Graphics& graphics, int x, int y, int size, Color color, const wchar_t* glyph) {
-    graphics.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
-    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
-
-    // Try Segoe Fluent Icons (Win11) first, fallback to Segoe MDL2 Assets (Win10)
-    FontFamily fontFamily(L"Segoe Fluent Icons");
-    if (!fontFamily.IsAvailable()) {
-        FontFamily fallback(L"Segoe MDL2 Assets");
-        Font font(&fallback, (REAL)(size * 0.88f), FontStyleRegular, UnitPixel);
-        SolidBrush brush(color);
-        StringFormat format;
-        format.SetAlignment(StringAlignmentCenter);
-        format.SetLineAlignment(StringAlignmentCenter);
-        RectF rect((REAL)x, (REAL)y, (REAL)size, (REAL)size);
-        graphics.DrawString(glyph, -1, &font, rect, &format, &brush);
-        return;
-    }
-
-    Font font(&fontFamily, (REAL)(size * 0.88f), FontStyleRegular, UnitPixel);
-    SolidBrush brush(color);
-    StringFormat format;
-    format.SetAlignment(StringAlignmentCenter);
-    format.SetLineAlignment(StringAlignmentCenter);
-    RectF rect((REAL)x, (REAL)y, (REAL)size, (REAL)size);
-    graphics.DrawString(glyph, -1, &font, rect, &format, &brush);
-}
+#include "FontManager.h"
+#include <cmath>
+#include <algorithm>
 
 void UIComponents::ApplyRoundedRegion(HWND hWndControl, int radius) {
     if (!hWndControl) return;
@@ -134,88 +105,411 @@ void UIComponents::DrawCloseButton(Graphics& graphics, int x, int y, int size, b
 // High-Quality MDL2 Icon Suite (Segoe MDL2 Assets / Segoe Fluent Icons)
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// Pure High-Precision Anti-Aliased Vector Icon Suite
+// 100% standalone, zero font dependencies, pixel-perfect at any DPI
+// ═══════════════════════════════════════════════════════════════
+
 void UIComponents::DrawIconLock(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE72E");
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+    float w = size * 0.72f;
+    float h = size * 0.54f;
+    float bx = cx - w / 2.0f;
+    float by = y + size * 0.42f;
+
+    // Shackle
+    float sw = size * 0.42f;
+    float sx = cx - sw / 2.0f;
+    float sy = y + size * 0.10f;
+    float sh = size * 0.44f;
+    Pen shkPen(color, (std::max)(1.6f, size * 0.12f));
+    shkPen.SetStartCap(LineCapRound);
+    shkPen.SetEndCap(LineCapRound);
+    graphics.DrawArc(&shkPen, sx, sy, sw, sh, 180, 180);
+    graphics.DrawLine(&shkPen, sx, sy + sh / 2.0f, sx, by);
+    graphics.DrawLine(&shkPen, sx + sw, sy + sh / 2.0f, sx + sw, by);
+
+    // Body
+    GraphicsPath* body = CreateRoundedRectPath((int)bx, (int)by, (int)w, (int)h, (std::max)(2, (int)(size * 0.14f)));
+    SolidBrush brush(color);
+    graphics.FillPath(&brush, body);
+    delete body;
+
+    // Keyhole
+    SolidBrush holeBrush(Color(255, 20, 20, 24));
+    graphics.FillEllipse(&holeBrush, cx - size * 0.07f, by + h * 0.28f, size * 0.14f, size * 0.14f);
+    Pen stemPen(Color(255, 20, 20, 24), (std::max)(1.4f, size * 0.09f));
+    graphics.DrawLine(&stemPen, cx, by + h * 0.35f, cx, by + h * 0.65f);
 }
 
 void UIComponents::DrawIconShield(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xEA18");
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+    float topY = (float)(y + size * 0.08f);
+    float botY = (float)(y + size * 0.92f);
+    float leftX = (float)(x + size * 0.12f);
+    float rightX = (float)(x + size * 0.88f);
+    float midY = (float)(y + size * 0.50f);
+
+    GraphicsPath path;
+    path.AddBezier(PointF(leftX, topY + size * 0.12f), PointF(leftX, topY), PointF(cx - size * 0.10f, topY), PointF(cx, topY));
+    path.AddBezier(PointF(cx, topY), PointF(cx + size * 0.10f, topY), PointF(rightX, topY), PointF(rightX, topY + size * 0.12f));
+    path.AddBezier(PointF(rightX, topY + size * 0.12f), PointF(rightX, midY), PointF(cx + size * 0.15f, botY - size * 0.10f), PointF(cx, botY));
+    path.AddBezier(PointF(cx, botY), PointF(cx - size * 0.15f, botY - size * 0.10f), PointF(leftX, midY), PointF(leftX, topY + size * 0.12f));
+    path.CloseFigure();
+
+    Pen pen(color, (std::max)(1.6f, size * 0.10f));
+    graphics.DrawPath(&pen, &path);
+
+    Pen innerPen(color, (std::max)(1.4f, size * 0.09f));
+    innerPen.SetStartCap(LineCapRound);
+    innerPen.SetEndCap(LineCapRound);
+    graphics.DrawLine(&innerPen, cx, topY + size * 0.22f, cx, botY - size * 0.25f);
 }
 
 void UIComponents::DrawIconLogs(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE8A5");
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float w = size * 0.65f;
+    float h = size * 0.82f;
+    float lx = x + (size - w) / 2.0f;
+    float ly = y + (size - h) / 2.0f;
+    float fold = size * 0.22f;
+
+    GraphicsPath path;
+    path.AddLine(lx, ly, lx + w - fold, ly);
+    path.AddLine(lx + w - fold, ly, lx + w, ly + fold);
+    path.AddLine(lx + w, ly + fold, lx + w, ly + h);
+    path.AddLine(lx + w, ly + h, lx, ly + h);
+    path.CloseFigure();
+
+    Pen pen(color, (std::max)(1.5f, size * 0.10f));
+    pen.SetStartCap(LineCapRound);
+    pen.SetEndCap(LineCapRound);
+    graphics.DrawPath(&pen, &path);
+
+    graphics.DrawLine(&pen, lx + w - fold, ly, lx + w - fold, ly + fold);
+    graphics.DrawLine(&pen, lx + w - fold, ly + fold, lx + w, ly + fold);
+
+    Pen linePen(color, (std::max)(1.3f, size * 0.08f));
+    linePen.SetStartCap(LineCapRound);
+    linePen.SetEndCap(LineCapRound);
+    graphics.DrawLine(&linePen, lx + size * 0.12f, ly + size * 0.36f, lx + w - size * 0.12f, ly + size * 0.36f);
+    graphics.DrawLine(&linePen, lx + size * 0.12f, ly + size * 0.52f, lx + w - size * 0.12f, ly + size * 0.52f);
+    graphics.DrawLine(&linePen, lx + size * 0.12f, ly + size * 0.68f, lx + w - size * 0.24f, ly + size * 0.68f);
 }
 
 void UIComponents::DrawIconInfo(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE946");
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+    float cy = y + size / 2.0f;
+    float r = size * 0.40f;
+
+    Pen pen(color, (std::max)(1.6f, size * 0.10f));
+    graphics.DrawEllipse(&pen, cx - r, cy - r, r * 2.0f, r * 2.0f);
+
+    SolidBrush brush(color);
+    float dotR = (std::max)(1.2f, size * 0.07f);
+    graphics.FillEllipse(&brush, cx - dotR, cy - size * 0.22f - dotR, dotR * 2.0f, dotR * 2.0f);
+
+    Pen stemPen(color, (std::max)(1.6f, size * 0.10f));
+    stemPen.SetStartCap(LineCapRound);
+    stemPen.SetEndCap(LineCapRound);
+    graphics.DrawLine(&stemPen, cx, cy - size * 0.06f, cx, cy + size * 0.20f);
 }
 
 void UIComponents::DrawIconWindows(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE782");
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+    float cy = y + size / 2.0f;
+    float half = size * 0.36f;
+    float gap = (std::max)(1.5f, size * 0.08f);
+    float pane = half - gap / 2.0f;
+
+    SolidBrush brush(color);
+    graphics.FillRectangle(&brush, cx - gap / 2.0f - pane, cy - gap / 2.0f - pane, pane, pane);
+    graphics.FillRectangle(&brush, cx + gap / 2.0f, cy - gap / 2.0f - pane, pane, pane);
+    graphics.FillRectangle(&brush, cx - gap / 2.0f - pane, cy + gap / 2.0f, pane, pane);
+    graphics.FillRectangle(&brush, cx + gap / 2.0f, cy + gap / 2.0f, pane, pane);
 }
 
 void UIComponents::DrawIconKey(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE8D7");
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    Pen pen(color, (std::max)(1.6f, size * 0.10f));
+    pen.SetStartCap(LineCapRound);
+    pen.SetEndCap(LineCapRound);
+
+    float headR = size * 0.20f;
+    float hx = x + size * 0.32f;
+    float hy = y + size * 0.35f;
+
+    graphics.DrawEllipse(&pen, hx - headR, hy - headR, headR * 2.0f, headR * 2.0f);
+
+    float stemStartX = hx + headR * 0.707f;
+    float stemStartY = hy + headR * 0.707f;
+    float stemEndX = x + size * 0.85f;
+    float stemEndY = y + size * 0.85f;
+
+    graphics.DrawLine(&pen, stemStartX, stemStartY, stemEndX, stemEndY);
+    graphics.DrawLine(&pen, stemEndX - size * 0.12f, stemEndY - size * 0.12f, stemEndX - size * 0.02f, stemEndY - size * 0.22f);
+    graphics.DrawLine(&pen, stemEndX, stemEndY, stemEndX + size * 0.08f, stemEndY - size * 0.08f);
 }
 
 void UIComponents::DrawIconDocument(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE8A5");
+    DrawIconLogs(graphics, x, y, size, color);
 }
 
 void UIComponents::DrawIconGlobe(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE774");
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+    float cy = y + size / 2.0f;
+    float r = size * 0.38f;
+
+    Pen pen(color, (std::max)(1.5f, size * 0.10f));
+    graphics.DrawEllipse(&pen, cx - r, cy - r, r * 2.0f, r * 2.0f);
+    graphics.DrawLine(&pen, cx - r, cy, cx + r, cy);
+    graphics.DrawEllipse(&pen, cx - r * 0.50f, cy - r, r, r * 2.0f);
 }
 
 void UIComponents::DrawIconTerminal(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE756");
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float w = size * 0.80f;
+    float h = size * 0.65f;
+    float tx = x + (size - w) / 2.0f;
+    float ty = y + (size - h) / 2.0f;
+
+    GraphicsPath* box = CreateRoundedRectPath((int)tx, (int)ty, (int)w, (int)h, (std::max)(2, (int)(size * 0.12f)));
+    Pen pen(color, (std::max)(1.5f, size * 0.10f));
+    graphics.DrawPath(&pen, box);
+    delete box;
+
+    Pen chevPen(color, (std::max)(1.5f, size * 0.10f));
+    chevPen.SetStartCap(LineCapRound);
+    chevPen.SetEndCap(LineCapRound);
+    graphics.DrawLine(&chevPen, tx + size * 0.18f, ty + size * 0.20f, tx + size * 0.32f, ty + size * 0.33f);
+    graphics.DrawLine(&chevPen, tx + size * 0.32f, ty + size * 0.33f, tx + size * 0.18f, ty + size * 0.46f);
+    graphics.DrawLine(&chevPen, tx + size * 0.40f, ty + size * 0.46f, tx + size * 0.60f, ty + size * 0.46f);
 }
 
 void UIComponents::DrawIconCalculator(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE8EF");
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float w = size * 0.70f;
+    float h = size * 0.85f;
+    float cx = x + (size - w) / 2.0f;
+    float cy = y + (size - h) / 2.0f;
+
+    GraphicsPath* body = CreateRoundedRectPath((int)cx, (int)cy, (int)w, (int)h, (std::max)(2, (int)(size * 0.12f)));
+    Pen pen(color, (std::max)(1.5f, size * 0.10f));
+    graphics.DrawPath(&pen, body);
+    delete body;
+
+    graphics.DrawLine(&pen, cx + size * 0.12f, cy + size * 0.22f, cx + w - size * 0.12f, cy + size * 0.22f);
+
+    SolidBrush dotBrush(color);
+    float dR = size * 0.06f;
+    graphics.FillEllipse(&dotBrush, cx + size * 0.18f, cy + size * 0.42f, dR * 2.0f, dR * 2.0f);
+    graphics.FillEllipse(&dotBrush, cx + w - size * 0.30f, cy + size * 0.42f, dR * 2.0f, dR * 2.0f);
+    graphics.FillEllipse(&dotBrush, cx + size * 0.18f, cy + size * 0.62f, dR * 2.0f, dR * 2.0f);
+    graphics.FillEllipse(&dotBrush, cx + w - size * 0.30f, cy + size * 0.62f, dR * 2.0f, dR * 2.0f);
 }
 
 void UIComponents::DrawIconPlus(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE710");
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+    float cy = y + size / 2.0f;
+    float arm = size * 0.32f;
+
+    Pen pen(color, (std::max)(1.8f, size * 0.12f));
+    pen.SetStartCap(LineCapRound);
+    pen.SetEndCap(LineCapRound);
+    graphics.DrawLine(&pen, cx - arm, cy, cx + arm, cy);
+    graphics.DrawLine(&pen, cx, cy - arm, cx, cy + arm);
 }
 
 void UIComponents::DrawIconTrash(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE74D");
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+    float w = size * 0.54f;
+    float h = size * 0.58f;
+    float bx = cx - w / 2.0f;
+    float by = y + size * 0.32f;
+
+    Pen pen(color, (std::max)(1.5f, size * 0.10f));
+    pen.SetStartCap(LineCapRound);
+    pen.SetEndCap(LineCapRound);
+
+    graphics.DrawLine(&pen, x + size * 0.15f, y + size * 0.25f, x + size * 0.85f, y + size * 0.25f);
+    graphics.DrawArc(&pen, cx - size * 0.12f, y + size * 0.12f, size * 0.24f, size * 0.20f, 180, 180);
+
+    GraphicsPath path;
+    path.AddLine(bx, by, bx + size * 0.06f, by + h);
+    path.AddLine(bx + size * 0.06f, by + h, bx + w - size * 0.06f, by + h);
+    path.AddLine(bx + w - size * 0.06f, by + h, bx + w, by);
+    graphics.DrawPath(&pen, &path);
+
+    graphics.DrawLine(&pen, cx - size * 0.10f, by + size * 0.12f, cx - size * 0.08f, by + h - size * 0.10f);
+    graphics.DrawLine(&pen, cx + size * 0.10f, by + size * 0.12f, cx + size * 0.08f, by + h - size * 0.10f);
 }
 
 void UIComponents::DrawIconExternalLink(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE8A7");
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float boxL = x + size * 0.15f;
+    float boxT = y + size * 0.35f;
+    float boxW = size * 0.50f;
+    float boxH = size * 0.50f;
+
+    Pen pen(color, (std::max)(1.5f, size * 0.10f));
+    pen.SetStartCap(LineCapRound);
+    pen.SetEndCap(LineCapRound);
+
+    GraphicsPath path;
+    path.AddLine(boxL + boxW * 0.50f, boxT, boxL, boxT);
+    path.AddLine(boxL, boxT, boxL, boxT + boxH);
+    path.AddLine(boxL, boxT + boxH, boxL + boxW, boxT + boxH);
+    path.AddLine(boxL + boxW, boxT + boxH, boxL + boxW, boxT + boxH * 0.50f);
+    graphics.DrawPath(&pen, &path);
+
+    float ax = x + size * 0.85f;
+    float ay = y + size * 0.15f;
+    graphics.DrawLine(&pen, boxL + boxW * 0.40f, boxT + boxH * 0.60f, ax, ay);
+    graphics.DrawLine(&pen, ax - size * 0.25f, ay, ax, ay);
+    graphics.DrawLine(&pen, ax, ay, ax, ay + size * 0.25f);
 }
 
 void UIComponents::DrawIconUpdate(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE895"); // Sync / Refresh Arrow
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+    float cy = y + size / 2.0f;
+    float r = size * 0.36f;
+
+    Pen arcPen(color, (std::max)(1.6f, size * 0.11f));
+    arcPen.SetStartCap(LineCapRound);
+    arcPen.SetEndCap(LineCapRound);
+
+    graphics.DrawArc(&arcPen, cx - r, cy - r, r * 2.0f, r * 2.0f, 30, 130);
+    graphics.DrawArc(&arcPen, cx - r, cy - r, r * 2.0f, r * 2.0f, 210, 130);
+
+    float a1x = cx + r * cosf(30.0f * 3.14159265f / 180.0f);
+    float a1y = cy - r * sinf(30.0f * 3.14159265f / 180.0f);
+    PointF arrow1[3] = {
+        PointF(a1x - size * 0.18f, a1y - size * 0.08f),
+        PointF(a1x + size * 0.04f, a1y),
+        PointF(a1x - size * 0.06f, a1y + size * 0.18f)
+    };
+    SolidBrush brush(color);
+    graphics.FillPolygon(&brush, arrow1, 3);
+
+    float a2x = cx - r * cosf(30.0f * 3.14159265f / 180.0f);
+    float a2y = cy + r * sinf(30.0f * 3.14159265f / 180.0f);
+    PointF arrow2[3] = {
+        PointF(a2x + size * 0.18f, a2y + size * 0.08f),
+        PointF(a2x - size * 0.04f, a2y),
+        PointF(a2x + size * 0.06f, a2y - size * 0.18f)
+    };
+    graphics.FillPolygon(&brush, arrow2, 3);
 }
 
 void UIComponents::DrawIconDownload(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE896"); // Download Arrow
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+
+    Pen pen(color, (std::max)(1.6f, size * 0.11f));
+    pen.SetStartCap(LineCapRound);
+    pen.SetEndCap(LineCapRound);
+
+    graphics.DrawLine(&pen, cx, y + size * 0.15f, cx, y + size * 0.65f);
+    graphics.DrawLine(&pen, cx - size * 0.22f, y + size * 0.45f, cx, y + size * 0.65f);
+    graphics.DrawLine(&pen, cx + size * 0.22f, y + size * 0.45f, cx, y + size * 0.65f);
+
+    graphics.DrawLine(&pen, x + size * 0.18f, y + size * 0.82f, x + size * 0.82f, y + size * 0.82f);
 }
 
 void UIComponents::DrawIconCheck(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE73E"); // Checkmark
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    Pen pen(color, (std::max)(1.8f, size * 0.12f));
+    pen.SetStartCap(LineCapRound);
+    pen.SetEndCap(LineCapRound);
+
+    graphics.DrawLine(&pen, x + size * 0.18f, y + size * 0.52f, x + size * 0.42f, y + size * 0.78f);
+    graphics.DrawLine(&pen, x + size * 0.42f, y + size * 0.78f, x + size * 0.84f, y + size * 0.24f);
 }
 
 void UIComponents::DrawIconWarning(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE7BA"); // Warning triangle
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+    float topY = y + size * 0.12f;
+    float botY = y + size * 0.88f;
+
+    Pen pen(color, (std::max)(1.6f, size * 0.10f));
+    pen.SetStartCap(LineCapRound);
+    pen.SetEndCap(LineCapRound);
+
+    GraphicsPath path;
+    path.AddLine(cx, topY, x + size * 0.88f, botY);
+    path.AddLine(x + size * 0.88f, botY, x + size * 0.12f, botY);
+    path.CloseFigure();
+    graphics.DrawPath(&pen, &path);
+
+    graphics.DrawLine(&pen, cx, topY + size * 0.25f, cx, topY + size * 0.50f);
+    SolidBrush brush(color);
+    graphics.FillEllipse(&brush, cx - size * 0.05f, botY - size * 0.16f, size * 0.10f, size * 0.10f);
 }
 
 void UIComponents::DrawIconClock(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE823"); // Clock / Time
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+    float cy = y + size / 2.0f;
+    float r = size * 0.40f;
+
+    Pen pen(color, (std::max)(1.5f, size * 0.10f));
+    pen.SetStartCap(LineCapRound);
+    pen.SetEndCap(LineCapRound);
+    graphics.DrawEllipse(&pen, cx - r, cy - r, r * 2.0f, r * 2.0f);
+
+    graphics.DrawLine(&pen, cx, cy, cx, cy - size * 0.24f);
+    graphics.DrawLine(&pen, cx, cy, cx + size * 0.18f, cy);
 }
 
 void UIComponents::DrawIconExport(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xEDE1"); // Export / Upload
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+
+    Pen pen(color, (std::max)(1.5f, size * 0.10f));
+    pen.SetStartCap(LineCapRound);
+    pen.SetEndCap(LineCapRound);
+
+    graphics.DrawLine(&pen, cx, y + size * 0.65f, cx, y + size * 0.15f);
+    graphics.DrawLine(&pen, cx - size * 0.20f, y + size * 0.35f, cx, y + size * 0.15f);
+    graphics.DrawLine(&pen, cx + size * 0.20f, y + size * 0.35f, cx, y + size * 0.15f);
+
+    GraphicsPath tray;
+    tray.AddLine(x + size * 0.20f, y + size * 0.55f, x + size * 0.20f, y + size * 0.85f);
+    tray.AddLine(x + size * 0.20f, y + size * 0.85f, x + size * 0.80f, y + size * 0.85f);
+    tray.AddLine(x + size * 0.80f, y + size * 0.85f, x + size * 0.80f, y + size * 0.55f);
+    graphics.DrawPath(&pen, &tray);
 }
 
 void UIComponents::DrawIconImport(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE8B5"); // Import / Folder Open
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
+    float cx = x + size / 2.0f;
+
+    Pen pen(color, (std::max)(1.5f, size * 0.10f));
+    pen.SetStartCap(LineCapRound);
+    pen.SetEndCap(LineCapRound);
+
+    graphics.DrawLine(&pen, cx, y + size * 0.15f, cx, y + size * 0.60f);
+    graphics.DrawLine(&pen, cx - size * 0.20f, y + size * 0.40f, cx, y + size * 0.60f);
+    graphics.DrawLine(&pen, cx + size * 0.20f, y + size * 0.40f, cx, y + size * 0.60f);
+
+    GraphicsPath tray;
+    tray.AddLine(x + size * 0.20f, y + size * 0.55f, x + size * 0.20f, y + size * 0.85f);
+    tray.AddLine(x + size * 0.20f, y + size * 0.85f, x + size * 0.80f, y + size * 0.85f);
+    tray.AddLine(x + size * 0.80f, y + size * 0.85f, x + size * 0.80f, y + size * 0.55f);
+    graphics.DrawPath(&pen, &tray);
 }
 
 void UIComponents::DrawIconLanguage(Graphics& graphics, int x, int y, int size, Color color) {
-    DrawMDL2Glyph(graphics, x, y, size, color, L"\xE774"); // Globe / Language
+    DrawIconGlobe(graphics, x, y, size, color);
 }
 
 void UIComponents::DrawProgressBar(Graphics& graphics, int x, int y, int w, int h, int percent) {
@@ -308,13 +602,23 @@ void UIComponents::DrawCanvasButton(Graphics& graphics, int x, int y, int w, int
     DrawCanvasCard(graphics, x, y, w, h, bg, border, 10);
 
     Color textCol = Color(255, 248, 250, 252);
-    int iconOffset = 0;
+    const FontFamily* pTextFam = FontManager::GetInstance().GetTextFamily();
+    Font font(pTextFam, 10.0f, FontStyleBold, UnitPoint);
+    SolidBrush textBrush(textCol);
 
     if (icon != VectorIcon::None) {
-        int iconSize = 16;
-        int iconX = x + 12;
+        int iconSize = 14;
+        int gap = 8;
+
+        RectF boundRect;
+        graphics.MeasureString(text.c_str(), -1, &font, PointF(0, 0), &boundRect);
+        float textW = boundRect.Width;
+        float totalW = iconSize + gap + textW;
+        float startX = x + (w - totalW) / 2.0f;
+        if (startX < x + 8.0f) startX = x + 8.0f;
+
+        int iconX = (int)startX;
         int iconY = y + (h - iconSize) / 2;
-        iconOffset = 18;
 
         switch (icon) {
         case VectorIcon::Lock:         DrawIconLock(graphics, iconX, iconY, iconSize, textCol); break;
@@ -338,17 +642,21 @@ void UIComponents::DrawCanvasButton(Graphics& graphics, int x, int y, int w, int
         case VectorIcon::LanguageIcon: DrawIconLanguage(graphics, iconX, iconY, iconSize, textCol); break;
         default: break;
         }
-    }
 
-    FontFamily fontFamily(L"Segoe UI");
-    Font font(&fontFamily, 9.5f, FontStyleBold, UnitPoint);
-    SolidBrush textBrush(textCol);
-    StringFormat format;
-    format.SetAlignment(StringAlignmentCenter);
-    format.SetLineAlignment(StringAlignmentCenter);
-    format.SetFormatFlags(StringFormatFlagsNoWrap);
-    RectF textRect((REAL)(x + (iconOffset > 0 ? 10 : 0)), (REAL)y, (REAL)(w - (iconOffset > 0 ? 10 : 0)), (REAL)h);
-    graphics.DrawString(text.c_str(), -1, &font, textRect, &format, &textBrush);
+        StringFormat format;
+        format.SetAlignment(StringAlignmentNear);
+        format.SetLineAlignment(StringAlignmentCenter);
+        format.SetFormatFlags(StringFormatFlagsNoWrap);
+        RectF textRect(startX + iconSize + gap, (REAL)y, (REAL)(w - (startX - x + iconSize + gap) - 4), (REAL)h);
+        graphics.DrawString(text.c_str(), -1, &font, textRect, &format, &textBrush);
+    } else {
+        StringFormat format;
+        format.SetAlignment(StringAlignmentCenter);
+        format.SetLineAlignment(StringAlignmentCenter);
+        format.SetFormatFlags(StringFormatFlagsNoWrap);
+        RectF textRect((REAL)x, (REAL)y, (REAL)w, (REAL)h);
+        graphics.DrawString(text.c_str(), -1, &font, textRect, &format, &textBrush);
+    }
 }
 
 void UIComponents::DrawCanvasToggle(Graphics& graphics, int x, int y, int w, int h, const std::wstring& text, bool isON, bool isHovered) {
@@ -377,8 +685,8 @@ void UIComponents::DrawCanvasToggle(Graphics& graphics, int x, int y, int w, int
     graphics.FillEllipse(&knobBrush, knobX, knobY, knobSize, knobSize);
     graphics.DrawEllipse(&knobPen, knobX, knobY, knobSize, knobSize);
 
-    FontFamily fontFamily(L"Segoe UI");
-    Font font(&fontFamily, 10.0f, FontStyleRegular, UnitPoint);
+    const FontFamily* pTextFam = FontManager::GetInstance().GetTextFamily();
+    Font font(pTextFam, 10.5f, FontStyleRegular, UnitPoint);
     SolidBrush textBrush(Color(255, 248, 250, 252));
     StringFormat format;
     format.SetAlignment(StringAlignmentNear);
@@ -417,8 +725,8 @@ void UIComponents::DrawCanvasListItem(Graphics& graphics, int x, int y, int w, i
         textStartX = x + 38;
     }
 
-    FontFamily fontFamily(L"Segoe UI");
-    Font font(&fontFamily, 10.0f, isSelected ? FontStyleBold : FontStyleRegular, UnitPoint);
+    const FontFamily* pTextFam = FontManager::GetInstance().GetTextFamily();
+    Font font(pTextFam, 10.5f, isSelected ? FontStyleBold : FontStyleRegular, UnitPoint);
     SolidBrush textBrush(textCol);
     StringFormat format;
     format.SetAlignment(StringAlignmentNear);
@@ -439,8 +747,8 @@ void UIComponents::DrawStatusBadge(Graphics& graphics, int x, int y, int w, int 
     SolidBrush dotBrush(dotColor);
     graphics.FillEllipse(&dotBrush, x + 10, y + (h - 8) / 2, 8, 8);
 
-    FontFamily fontFamily(L"Segoe UI");
-    Font font(&fontFamily, 9.5f, FontStyleBold, UnitPoint);
+    const FontFamily* pTextFam = FontManager::GetInstance().GetTextFamily();
+    Font font(pTextFam, 9.5f, FontStyleBold, UnitPoint);
     SolidBrush textBrush(isActive ? Color(255, 52, 199, 89) : Color(255, 255, 69, 58));
     StringFormat format;
     format.SetAlignment(StringAlignmentCenter);
@@ -455,12 +763,14 @@ void UIComponents::DrawEmptyState(Graphics& graphics, int x, int y, int w, int h
     int centerX = x + w / 2;
     int centerY = y + h / 2 - 30;
 
-    // Large shield icon using MDL2
-    DrawMDL2Glyph(graphics, centerX - 20, centerY - 20, 40, Color(120, 148, 163, 184), L"\xEA18");
+    // Large vector shield icon
+    DrawIconShield(graphics, centerX - 22, centerY - 22, 44, Color(140, 148, 163, 184));
 
-    FontFamily fontFamily(L"Segoe UI");
-    Font titleFont(&fontFamily, 11.0f, FontStyleBold, UnitPoint);
-    Font subFont(&fontFamily, 9.5f, FontStyleRegular, UnitPoint);
+    const FontFamily* pDisplayFam = FontManager::GetInstance().GetDisplayFamily();
+    const FontFamily* pTextFam = FontManager::GetInstance().GetTextFamily();
+
+    Font titleFont(pDisplayFam, 12.5f, FontStyleBold, UnitPoint);
+    Font subFont(pTextFam, 10.0f, FontStyleRegular, UnitPoint);
 
     SolidBrush titleBrush(Color(255, 248, 250, 252));
     SolidBrush subBrush(Color(255, 148, 163, 184));
@@ -470,7 +780,7 @@ void UIComponents::DrawEmptyState(Graphics& graphics, int x, int y, int w, int h
     format.SetLineAlignment(StringAlignmentCenter);
 
     RectF titleRect((REAL)x, (REAL)(centerY + 30), (REAL)w, 24.0f);
-    RectF subRect((REAL)x, (REAL)(centerY + 54), (REAL)w, 20.0f);
+    RectF subRect((REAL)x, (REAL)(centerY + 56), (REAL)w, 20.0f);
 
     graphics.DrawString(title.c_str(), -1, &titleFont, titleRect, &format, &titleBrush);
     graphics.DrawString(subtitle.c_str(), -1, &subFont, subRect, &format, &subBrush);

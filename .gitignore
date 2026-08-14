@@ -70,7 +70,14 @@ $RECYCLE.BIN/
 *.temp
 ~$*
 
-# --- macOS System Files ---
+# --- Release Distribution Deliverables ---
+dist/
+
+# --- Internal Version Documentation ---
+version.md
+VERSION.md
+VERSION_GUIDE.md
+
 # --- Nested Sub-Projects & Repos ---
 AIDS/
 

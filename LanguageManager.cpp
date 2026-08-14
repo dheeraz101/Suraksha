@@ -52,7 +52,7 @@ void LanguageManager::InitStringTables() {
     en[L"LANGUAGE_SECTION"] = L"Display Language";
     en[L"STATUS_PROTECTED"] = L"Protected";
     en[L"STATUS_PAUSED"] = L"Paused";
-    en[L"ADD_APP"] = L"+ Add Application...";
+    en[L"ADD_APP"] = L"Add Application...";
     en[L"REMOVE_APP"] = L"Remove App";
 
     // ═══════════════════════════════════════════════════════════════
@@ -60,7 +60,7 @@ void LanguageManager::InitStringTables() {
     // ═══════════════════════════════════════════════════════════════
     auto& hi = m_tables[Language::Hindi];
     hi[L"TAB_APPLOCKER"] = L"\x0910\x092A \x0932\x0949\x0915\x0930";
-    hi[L"TAB_SECURITY"] = L"\x0938\x0941\x0930\x0915\x094D\x0937\x093E \x090F\x09 intram\x094D \x092A\x094D\x0930\x092E\x093E\x0923\x0940\x0915\x0930\x0923";
+    hi[L"TAB_SECURITY"] = L"\x0938\x0941\x0930\x0915\x094D\x0937\x093E \x090F\x0935\x0902 \x092A\x094D\x0930\x092E\x093E\x0923\x0940\x0915\x0930\x0923";
     hi[L"TAB_UPDATES"] = L"\x0938\x0949\x092B\x094D\x091F\x0935\x0947\x092F\x0930 \x0905\x092A\x0921\x0947\x091F";
     hi[L"TAB_AUDIT"] = L"\x0911\x0921\x093F\x091F \x0932\x0949\x0917";
     hi[L"TAB_LOGS"] = L"\x0911\x0921\x093F\x091F \x0932\x0949\x0917";
@@ -79,7 +79,7 @@ void LanguageManager::InitStringTables() {
     hi[L"LANGUAGE_SECTION"] = L"\x092A\x094D\x0930\x0926\x0930\x094D\x0936\x0928 \x092D\x093E\x0937\x093E";
     hi[L"STATUS_PROTECTED"] = L"\x0938\x0941\x0930\x0915\x094D\x0937\x093F\x0924";
     hi[L"STATUS_PAUSED"] = L"\x0930\x094B\x0915\x093E \x0917\x092F\x093E";
-    hi[L"ADD_APP"] = L"+ \x090F\x092A \x091C\x094B\x0921\x093c\x0947\x0902...";
+    hi[L"ADD_APP"] = L"\x090F\x092A \x091C\x094B\x0921\x093c\x0947\x0902...";
     hi[L"REMOVE_APP"] = L"\x090F\x092A \x0939\x091F\x093E\x090F\x0902";
 
     // ═══════════════════════════════════════════════════════════════
@@ -106,7 +106,7 @@ void LanguageManager::InitStringTables() {
     es[L"LANGUAGE_SECTION"] = L"Idioma";
     es[L"STATUS_PROTECTED"] = L"Protegido";
     es[L"STATUS_PAUSED"] = L"Pausado";
-    es[L"ADD_APP"] = L"+ A\x00F1""adir Aplicaci\x00F3""n...";
+    es[L"ADD_APP"] = L"A\x00F1""adir Aplicaci\x00F3""n...";
     es[L"REMOVE_APP"] = L"Eliminar";
 
     // ═══════════════════════════════════════════════════════════════
@@ -133,7 +133,7 @@ void LanguageManager::InitStringTables() {
     de[L"LANGUAGE_SECTION"] = L"Sprache";
     de[L"STATUS_PROTECTED"] = L"Gesch\x00FC""tzt";
     de[L"STATUS_PAUSED"] = L"Pausiert";
-    de[L"ADD_APP"] = L"+ App hinzuf\x00FC""gen...";
+    de[L"ADD_APP"] = L"App hinzuf\x00FC""gen...";
     de[L"REMOVE_APP"] = L"Entfernen";
 
     // ═══════════════════════════════════════════════════════════════
@@ -160,7 +160,7 @@ void LanguageManager::InitStringTables() {
     fr[L"LANGUAGE_SECTION"] = L"Langue";
     fr[L"STATUS_PROTECTED"] = L"Prot\x00E9""g\x00E9";
     fr[L"STATUS_PAUSED"] = L"En Pause";
-    fr[L"ADD_APP"] = L"+ Ajouter une appli...";
+    fr[L"ADD_APP"] = L"Ajouter une appli...";
     fr[L"REMOVE_APP"] = L"Supprimer";
 
     // ═══════════════════════════════════════════════════════════════
@@ -170,8 +170,8 @@ void LanguageManager::InitStringTables() {
     ja[L"TAB_APPLOCKER"] = L"\x30A2\x30D7\x30EA\x30ED\x30C3\x30AF";
     ja[L"TAB_SECURITY"] = L"\x30BB\x30AD\x30E5\x30EA\x30C6\x30A3";
     ja[L"TAB_UPDATES"] = L"\x30BD\x30D5\x30C8\x30A6\x30A7\x30A2\x66F4\x65B0";
-    ja[L"TAB_AUDIT"] = L"\x76E3\x67FB\x30ED\x3010";
-    ja[L"TAB_LOGS"] = L"\x76E3\x67FB\x30ED\x3010";
+    ja[L"TAB_AUDIT"] = L"\x76E3\x67FB\x30ED\x30B0";
+    ja[L"TAB_LOGS"] = L"\x76E3\x67FB\x30ED\x30B0";
     ja[L"TAB_ABOUT"] = L"Suraksha \x306B\x3064\x3044\x3066";
     ja[L"PROTECTED_APPS"] = L"\x4FDD\x8B77\x3055\x308C\x305F\x30A2\x30D7\x30EA";
     ja[L"SECURITY_DEFENSE"] = L"\x30BB\x30AD\x30E5\x30EA\x30C6\x30A3\x3068\x8A8D\x8A3C";
@@ -187,6 +187,6 @@ void LanguageManager::InitStringTables() {
     ja[L"LANGUAGE_SECTION"] = L"\x8868\x793A\x8A00\x8A9E";
     ja[L"STATUS_PROTECTED"] = L"\x4FDD\x8B77\x4E2D";
     ja[L"STATUS_PAUSED"] = L"\x4E00\x6642\x505C\x6B62";
-    ja[L"ADD_APP"] = L"+ \x30A2\x30D7\x30EA\x3092\x8FFD\x52A0...";
+    ja[L"ADD_APP"] = L"\x30A2\x30D7\x30EA\x3092\x8FFD\x52A0...";
     ja[L"REMOVE_APP"] = L"\x524A\x9664";
 }
