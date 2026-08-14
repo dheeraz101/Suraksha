@@ -7,15 +7,20 @@ on:
       - 'release/**'
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-release:
     name: Build, Sign & Package Installer + MSIX
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -118,22 +123,16 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          Write-Host "Downloading Inno Setup 6 directly..."
-          $installerPath = "$env:TEMP\innosetup.exe"
-          Invoke-WebRequest -Uri "https://files.jrsoftware.org/is/6/innosetup-6.3.3.exe" -OutFile $installerPath -UseBasicParsing
-          Write-Host "Installing Inno Setup 6 silently..."
-          $proc = Start-Process -FilePath $installerPath -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS /NORESTART /SP-" -PassThru -Wait
-          Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
-          Write-Host "Inno Setup installed successfully!"
+          choco install innosetup -y --no-progress
 
       - name: Compile Inno Setup Installer
         shell: pwsh
         run: |
-          $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          if (!(Test-Path $isccPath)) {
-            $isccPath = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+          $isccPath = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+          if (-not $isccPath) {
+            $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           }
-          if (!(Test-Path $isccPath)) {
+          if (-not (Test-Path $isccPath)) {
             $isccPath = (Get-ChildItem -Path "C:\Program Files*" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
           }
           Write-Host "Compiling installer with: $isccPath"
@@ -171,12 +170,19 @@ jobs:
             Write-Host "Temporary certificate removed from runner."
           }
 
-      - name: Generate Checksums & Copy Artifacts
+      - name: Generate Checksums & Prepare Assets
         shell: pwsh
         run: |
           Copy-Item "x64\Release\Suraksha.exe" -Destination "dist\" -Force
           Get-FileHash -Path "dist\*" -Algorithm SHA256 | Format-List | Out-File "dist\SHA256SUMS.txt"
           Get-Content "dist\SHA256SUMS.txt"
+
+      - name: Upload Build Artifacts to GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: Suraksha-v2.0.0-Release-Builds
+          path: dist/
+          retention-days: 30
 
       - name: Determine Tag Name
         id: tag_name
