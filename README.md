@@ -2,7 +2,7 @@
   <img src="banner.png" width="100%" alt="Suraksha Banner" />
 </p>
 
-# Suraksha - Privacy & Security (v2.0.0)
+# Suraksha - Privacy & Security (v2.0.1-beta)
 
 <p align="center">
   <b>A Lightweight, Native, Ultra-Fast Windows Application Locker inspired by Apple Human Interface Guidelines (HIG).</b>
@@ -97,3 +97,4 @@ Suraksha includes system-wide hotkeys active from anywhere in Windows:
 - **Developer**: [Dheeraz](https://dheeraz.dpdns.org/) ([GitHub](https://github.com/dheeraz101))
 - **Initiative**: An **YABP** Initiative - *Yet Another Boring Project* ([yabp.netlify.app](https://yabp.netlify.app/))
 - **License**: Released under the **GNU General Public License v3.0 (GPLv3)**. See [LICENSE](LICENSE) for full details.
+
