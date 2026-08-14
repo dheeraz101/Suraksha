@@ -219,11 +219,8 @@ jobs:
             - **`SurakshaSetup-v2.0.0-x64.exe`**: Classic Windows Setup Installer
             - **`Suraksha.exe`**: Standalone Portable Executable
             - Check `SHA256SUMS.txt` for integrity hashes.
-          files: |
-            dist/Suraksha.exe
-            dist/*.exe
-            dist/*.msix
-            dist/SHA256SUMS.txt
+          files: dist/*
+          fail_on_unmatched_files: false
           draft: false
           prerelease: false
         env:
