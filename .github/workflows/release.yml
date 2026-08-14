@@ -1,0 +1,152 @@
+name: Suraksha Release Pipeline (Build, Sign & Package)
+
+on:
+  push:
+    branches:
+      - release
+      - 'release/**'
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build, Sign & Package Installer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Release Binary (x64)
+        run: |
+          msbuild Suraksha.vcxproj /p:Configuration=Release /p:Platform=x64 /m /verbosity:minimal
+
+      - name: Setup Code Signing Certificate
+        id: setup-cert
+        shell: pwsh
+        env:
+          CERT_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
+          CERT_PASS: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          if ($env:CERT_BASE64 -and $env:CERT_PASS) {
+            Write-Host "Decoding production code signing certificate from GitHub Secrets..."
+            [IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", [Convert]::FromBase64String($env:CERT_BASE64))
+            echo "has_prod_cert=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "No production certificate found in secrets. Creating self-signed test certificate..."
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Suraksha Open Source Test" -CertStoreLocation "Cert:\CurrentUser\My"
+            $pwd = ConvertTo-SecureString -String "SurakshaTest123" -Force -AsPlainText
+            Export-PfxCertificate -Cert $cert -FilePath "$env:TEMP\cert.pfx" -Password $pwd
+            $env:CERT_PASS = "SurakshaTest123"
+            echo "has_prod_cert=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Sign Suraksha.exe
+        shell: pwsh
+        env:
+          CERT_PASS: ${{ secrets.CERTIFICATE_PASSWORD || 'SurakshaTest123' }}
+        run: |
+          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1).FullName
+          Write-Host "Using SignTool at: $signtool"
+          
+          & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 "x64\Release\Suraksha.exe"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Timestamp server unreachable, signing without timestamp..."
+            & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 "x64\Release\Suraksha.exe"
+          }
+          Write-Host "Suraksha.exe successfully signed!"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+
+      - name: Compile Inno Setup Installer
+        shell: pwsh
+        run: |
+          $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $isccPath)) {
+            $isccPath = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+          }
+          Write-Host "Compiling installer with: $isccPath"
+          & "$isccPath" "SurakshaSetup.iss"
+
+      - name: Sign Installer Setup File
+        shell: pwsh
+        env:
+          CERT_PASS: ${{ secrets.CERTIFICATE_PASSWORD || 'SurakshaTest123' }}
+        run: |
+          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1).FullName
+          $installerPath = Get-ChildItem -Path "Output" -Filter "*.exe" | Select-Object -First 1 -ExpandProperty FullName
+          Write-Host "Signing installer: $installerPath"
+
+          & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 "$installerPath"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Timestamp server unreachable, signing without timestamp..."
+            & $signtool sign /f "$env:TEMP\cert.pfx" /p "$env:CERT_PASS" /fd SHA256 "$installerPath"
+          }
+          Write-Host "Installer successfully signed!"
+
+      - name: Clean Up Sensitive Temporary Certificates
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "$env:TEMP\cert.pfx") {
+            Remove-Item "$env:TEMP\cert.pfx" -Force
+            Write-Host "Temporary certificate removed from runner."
+          }
+
+      - name: Generate Checksums
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "dist"
+          Copy-Item "x64\Release\Suraksha.exe" -Destination "dist\"
+          Copy-Item "Output\*.exe" -Destination "dist\"
+          
+          Get-FileHash -Path "dist\*" -Algorithm SHA256 | Format-List | Out-File "dist\SHA256SUMS.txt"
+          Get-Content "dist\SHA256SUMS.txt"
+
+      - name: Determine Tag Name
+        id: tag_name
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like "refs/tags/*") {
+            $tag = $env:GITHUB_REF -replace "refs/tags/", ""
+          } else {
+            $tag = "v2.0.0"
+          }
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag_name.outputs.tag }}
+          name: "Suraksha ${{ steps.tag_name.outputs.tag }}"
+          body: |
+            ## 🛡️ Suraksha Release ${{ steps.tag_name.outputs.tag }}
+            
+            ### ✨ Highlights
+            - **Native Windows Application Locker & Session Security**
+            - **Sub-50ms Process Interception Engine**
+            - **Hardware-bound DPAPI & Windows Hello Security**
+            - **Zero Telemetry / 100% Offline Privacy Guarantee**
+            
+            ### 📦 Downloads & Verification
+            - `SurakshaSetup-v2.0.0-x64.exe` (Official Windows Installer)
+            - `Suraksha.exe` (Portable Standalone Executable)
+            - See `SHA256SUMS.txt` for integrity hashes.
+          files: |
+            dist/Suraksha.exe
+            dist/*.exe
+            dist/SHA256SUMS.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
