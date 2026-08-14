@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    Suraksha Automated Version & Build Tag Manager
+    Suraksha Apple-Style Automated Build & Version Manager
 .DESCRIPTION
-    Automatically detects current version, increments version based on -beta or -release,
-    generates a timestamped build number (Time + Date + Channel [B/S] + Version),
-    and updates all project files.
+    Generates Apple-inspired compact build codes (e.g. 26B0815a, 26B0815b)
+    Format: [YY][Channel B/S][MMDD][Iteration a, b, c...]
+    Supports -beta and -release switches with automatic daily iteration detection.
 .EXAMPLE
     .\scripts\Set-Version.ps1 -beta
 .EXAMPLE
@@ -18,10 +18,10 @@ param (
 )
 
 Write-Host "=========================================" -ForegroundColor Cyan
-Write-Host "  Suraksha Build & Version Manager" -ForegroundColor Cyan
+Write-Host "  Suraksha Build & Version Manager (Apple HIG)" -ForegroundColor Cyan
 Write-Host "=========================================" -ForegroundColor Cyan
 
-# Determine mode (default to beta if neither specified, or pick the switch provided)
+# Determine channel
 $isBeta = $true
 if ($release) {
     $isBeta = $false
@@ -29,7 +29,7 @@ if ($release) {
     $isBeta = $true
 }
 
-# 1. Read current version and status from Version.h
+# 1. Read current version from Version.h
 $versionHPath = "Version.h"
 if (-not (Test-Path $versionHPath)) {
     Write-Error "Version.h not found in project root!"
@@ -42,15 +42,17 @@ $major = 2
 $minor = 0
 $patch = 0
 $wasBeta = $false
+$prevBuildTag = ""
 
 if ($versionHContent -match '#define\s+SURAKSHA_VERSION_MAJOR\s+(\d+)') { $major = [int]$Matches[1] }
 if ($versionHContent -match '#define\s+SURAKSHA_VERSION_MINOR\s+(\d+)') { $minor = [int]$Matches[1] }
 if ($versionHContent -match '#define\s+SURAKSHA_VERSION_PATCH\s+(\d+)') { $patch = [int]$Matches[1] }
 if ($versionHContent -match '#define\s+SURAKSHA_IS_BETA\s+(true|false)') { $wasBeta = ($Matches[1] -eq "true") }
+if ($versionHContent -match '#define\s+SURAKSHA_BUILD_TAG\s+L"([^"]+)"') { $prevBuildTag = $Matches[1] }
 
-Write-Host "Previous State: v$major.$minor.$patch (Beta: $wasBeta)" -ForegroundColor DarkGray
+Write-Host "Previous State: v$major.$minor.$patch (Beta: $wasBeta, Last Build: $prevBuildTag)" -ForegroundColor DarkGray
 
-# 2. Compute Next Version
+# 2. Determine Semantic Version
 if ($Version) {
     if ($Version -match '^(\d+)\.(\d+)\.(\d+)') {
         $newMajor = [int]$Matches[1]
@@ -66,15 +68,13 @@ if ($Version) {
     $newPatch = $patch
 
     if ($isBeta) {
-        # If transitioning to beta or advancing beta, bump patch (X.X.1 or X.1.X)
-        $newPatch++
+        # Advance patch when moving from stable to beta
+        if (-not $wasBeta) {
+            $newPatch++
+        }
     } else {
-        # If releasing stable: graduate beta (or bump minor if already stable)
-        if ($wasBeta) {
-            # Graduate beta to stable version
-            $newPatch = $patch
-        } else {
-            # Next stable minor release
+        # If moving from beta to stable, keep patch (or bump minor if already stable)
+        if (-not $wasBeta) {
             $newMinor++
             $newPatch = 0
         }
@@ -85,31 +85,65 @@ $semVer = "$newMajor.$newMinor.$newPatch"
 $channelChar = if ($isBeta) { "B" } else { "S" }
 $channelName = if ($isBeta) { "Beta" } else { "Stable" }
 
-# Timestamp format: Time(HHmm) + Date(ddMMyyyy)
-$timeDate = Get-Date -Format "HHmm.ddMMyyyy"
-# Build Number: Time.Date.Channel.Version (e.g. 0005.15082026.B.v2.0.1 or 0005.15082026.S.v2.1.0)
-$buildTag = "$timeDate-$channelChar-v$semVer"
+# 3. Generate Apple-Style Compact Build Code: [YY][Channel][MMDD][Suffix a, b, c...]
+$todayYY = Get-Date -Format "yy"
+$todayMMDD = Get-Date -Format "MMdd"
+$todayBaseTag = "$todayYY$channelChar$todayMMDD"
+
+$suffix = "a"
+if ($isBeta) {
+    # Check if we already built a beta today
+    if ($prevBuildTag -match "^$todayBaseTag([a-z]?)$") {
+        $currentSuffix = $Matches[1]
+        if ([string]::IsNullOrEmpty($currentSuffix)) {
+            $suffix = "b"
+        } else {
+            # Increment letter: a -> b, b -> c, etc.
+            $charVal = [int][char]$currentSuffix
+            $nextChar = [char]($charVal + 1)
+            $suffix = [string]$nextChar
+        }
+    } else {
+        $suffix = "a"
+    }
+    $buildTag = "$todayBaseTag$suffix"
+} else {
+    # For Stable: first release of day has no letter, subsequent get b, c...
+    if ($prevBuildTag -match "^$todayBaseTag([a-z]?)$") {
+        $currentSuffix = $Matches[1]
+        if ([string]::IsNullOrEmpty($currentSuffix)) {
+            $suffix = "b"
+        } else {
+            $charVal = [int][char]$currentSuffix
+            $nextChar = [char]($charVal + 1)
+            $suffix = [string]$nextChar
+        }
+        $buildTag = "$todayBaseTag$suffix"
+    } else {
+        $buildTag = "$todayBaseTag"
+    }
+}
 
 $rawDisplayVer = if ($isBeta) { "$semVer-beta" } else { "$semVer" }
-$displayVersion = if ($isBeta) { "$semVer-beta (Build: $buildTag)" } else { "$semVer (Build: $buildTag)" }
+$displayVersion = if ($isBeta) { "$semVer-beta ($buildTag)" } else { "$semVer ($buildTag)" }
 $msixVersion = "$newMajor.$newMinor.$newPatch.0"
 
 Write-Host ""
-Write-Host "Generated New Build Profile:" -ForegroundColor Yellow
+Write-Host "Generated New Apple-Style Build Profile:" -ForegroundColor Yellow
 Write-Host "  * Channel:         $channelName ($channelChar)" -ForegroundColor White
 Write-Host "  * Semantic Ver:    $semVer" -ForegroundColor White
-Write-Host "  * Build Number:    $buildTag" -ForegroundColor White
-Write-Host "  * Display Version: $displayVersion" -ForegroundColor White
+Write-Host "  * Apple Build Tag: $buildTag" -ForegroundColor Cyan
+Write-Host "  * Display String:  $displayVersion" -ForegroundColor White
 Write-Host "  * MSIX Version:    $msixVersion" -ForegroundColor White
 Write-Host ""
 
-# 3. Update Version.h
+# 4. Update Version.h
 $isBetaLiteral = if ($isBeta) { "true" } else { "false" }
 $lines = @(
     "#pragma once",
     "",
     "// ═══════════════════════════════════════════════════════════════",
-    "// Suraksha Version & Build Number Definition",
+    "// Suraksha Version & Apple-Style Build Definition",
     "// Automatically generated by scripts/Set-Version.ps1",
     "// ═══════════════════════════════════════════════════════════════",
     "",
@@ -123,15 +157,15 @@ $lines = @(
     "#define SURAKSHA_IS_BETA            $isBetaLiteral",
     "",
     "#if SURAKSHA_IS_BETA",
-    "    #define SURAKSHA_DISPLAY_VERSION L`"$semVer-beta [Build $buildTag]`"",
+    "    #define SURAKSHA_DISPLAY_VERSION L`"$semVer-beta ($buildTag)`"",
     "#else",
-    "    #define SURAKSHA_DISPLAY_VERSION L`"$semVer [Build $buildTag]`"",
+    "    #define SURAKSHA_DISPLAY_VERSION L`"$semVer ($buildTag)`"",
     "#endif"
 )
 $lines | Out-File -FilePath "Version.h" -Encoding utf8
 Write-Host "[OK] Updated Version.h" -ForegroundColor Green
 
-# 4. Update SurakshaSetup.iss
+# 5. Update SurakshaSetup.iss
 if (Test-Path "SurakshaSetup.iss") {
     $issContent = Get-Content "SurakshaSetup.iss" -Raw
     $issContent = $issContent -replace '#define MyAppVersion "[^"]+"', "#define MyAppVersion `"$rawDisplayVer`""
@@ -139,7 +173,7 @@ if (Test-Path "SurakshaSetup.iss") {
     Write-Host "[OK] Updated SurakshaSetup.iss" -ForegroundColor Green
 }
 
-# 5. Update packaging/AppxManifest.xml
+# 6. Update packaging/AppxManifest.xml
 if (Test-Path "packaging\AppxManifest.xml") {
     [xml]$manifest = Get-Content "packaging\AppxManifest.xml"
     $manifest.Package.Identity.Version = $msixVersion
@@ -147,7 +181,7 @@ if (Test-Path "packaging\AppxManifest.xml") {
     Write-Host "[OK] Updated packaging/AppxManifest.xml" -ForegroundColor Green
 }
 
-# 6. Update README.md
+# 7. Update README.md
 if (Test-Path "README.md") {
     $readme = Get-Content "README.md" -Raw
     $readme = [regex]::Replace($readme, '# Suraksha.*?\n', "# Suraksha - Privacy & Security (v$rawDisplayVer)`n")
@@ -157,5 +191,5 @@ if (Test-Path "README.md") {
 
 Write-Host ""
 Write-Host "=========================================" -ForegroundColor Cyan
-Write-Host "  Build successfully updated to $displayVersion!" -ForegroundColor Green
+Write-Host "  Apple Build Code: $buildTag ($displayVersion)" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Cyan

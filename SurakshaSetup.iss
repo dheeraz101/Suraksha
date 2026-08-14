@@ -4,7 +4,7 @@
 ; =====================================================================
 
 #define MyAppName "Suraksha"
-#define MyAppVersion "2.0.1"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "Dheeraz (YABP Initiative)"
 #define MyAppURL "https://yabp.netlify.app/"
 #define MyAppExeName "Suraksha.exe"
@@ -63,6 +63,11 @@ Name: "{autostartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: st
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+
+
+
+
 
 
 
