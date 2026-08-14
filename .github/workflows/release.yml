@@ -174,7 +174,12 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item "x64\Release\Suraksha.exe" -Destination "dist\" -Force
-          Get-FileHash -Path "dist\*" -Algorithm SHA256 | Format-List | Out-File "dist\SHA256SUMS.txt"
+          $files = Get-ChildItem -Path "dist" -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" }
+          $lines = foreach ($f in $files) {
+            $hash = (Get-FileHash -Path $f.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($f.Name)"
+          }
+          $lines | Out-File -FilePath "dist\SHA256SUMS.txt" -Encoding ascii
           Get-Content "dist\SHA256SUMS.txt"
 
       - name: Upload Build Artifacts to GitHub Actions

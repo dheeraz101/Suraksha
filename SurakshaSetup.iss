@@ -34,6 +34,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
 CloseApplicationsFilter={#MyAppExeName}
 DisableProgramGroupPage=yes
+PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 UninstallDisplayIcon={app}\{#MyAppExeName}
 VersionInfoVersion={#MyAppVersion}
@@ -58,7 +59,7 @@ Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Suraksha.ico"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Suraksha.ico"; Tasks: desktopicon
-Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startupicon
+Name: "{autostartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startupicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
