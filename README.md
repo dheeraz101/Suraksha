@@ -1,8 +1,10 @@
+<p align="center">
+  <img src="banner.png" width="100%" alt="Suraksha Banner" />
+</p>
+
 # Suraksha - Privacy & Security (v2.0.0)
 
 <p align="center">
-  <img src="logo.png" width="128" alt="Suraksha Logo" />
-  <br>
   <b>A Lightweight, Native, Ultra-Fast Windows Application Locker inspired by Apple Human Interface Guidelines (HIG).</b>
   <br>
   <i>An <b>YABP</b> Initiative - Yet Another Boring Project</i>

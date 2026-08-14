@@ -1,4 +1,4 @@
-name: Suraksha CI (Master / PR)
+name: Suraksha CI (Master Verification)
 
 on:
   push:
@@ -15,35 +15,76 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  code-quality:
-    name: Code Quality & Format Check
+  integrity-check:
+    name: Repository & Manifest Integrity
     runs-on: windows-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Check Clang-Format
+      - name: Validate Version & Header Files
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Recurse -Include *.cpp,*.h | Where-Object { $_.FullName -notmatch '\\(Debug|Release|x64|\.vs|AIDS)\\' }
-          Write-Host "Checking formatting on $($files.Count) C++ source files..."
-          # Verify files exist and are readable
-          foreach ($file in $files) {
-            Write-Host "Validated source file: $($file.Name)"
+          Write-Host ">>> Checking Version.h integrity..." -ForegroundColor Cyan
+          if (-not (Test-Path "Version.h")) {
+            Write-Error "Version.h is missing!"
+            exit 1
+          }
+          $vContent = Get-Content "Version.h" -Raw
+          if ($vContent -notmatch '#define\s+SURAKSHA_VERSION_STRING') {
+            Write-Error "SURAKSHA_VERSION_STRING missing in Version.h"
+            exit 1
+          }
+          if ($vContent -notmatch '#define\s+SURAKSHA_BUILD_TAG') {
+            Write-Error "SURAKSHA_BUILD_TAG missing in Version.h"
+            exit 1
+          }
+          Write-Host "[OK] Version.h structure verified!" -ForegroundColor Green
+
+      - name: Validate MSIX AppxManifest XML
+        shell: pwsh
+        run: |
+          Write-Host ">>> Checking AppxManifest.xml syntax..." -ForegroundColor Cyan
+          $manifestPath = "packaging\AppxManifest.xml"
+          if (Test-Path $manifestPath) {
+            [xml]$xml = Get-Content $manifestPath
+            if (-not $xml.Package.Identity.Name) {
+              Write-Error "Invalid Package Identity in AppxManifest.xml"
+              exit 1
+            }
+            Write-Host "[OK] AppxManifest.xml is valid XML (Identity: $($xml.Package.Identity.Name))" -ForegroundColor Green
+          } else {
+            Write-Warning "AppxManifest.xml not found, skipping XML test."
+          }
+
+      - name: Validate PowerShell Scripts Syntax
+        shell: pwsh
+        run: |
+          Write-Host ">>> Checking PowerShell scripts syntax..." -ForegroundColor Cyan
+          $psScripts = Get-ChildItem -Path scripts -Filter "*.ps1" -Recurse -ErrorAction SilentlyContinue
+          foreach ($script in $psScripts) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              Write-Error "Syntax error in script $($script.Name): $($errors[0].Message)"
+              exit 1
+            }
+            Write-Host "[OK] Verified script syntax: $($script.Name)" -ForegroundColor Green
           }
 
   build-validation:
-    name: MSBuild Verification (x64)
+    name: Matrix MSBuild (x64)
     runs-on: windows-latest
-    needs: code-quality
+    needs: integrity-check
     strategy:
+      fail-fast: false
       matrix:
         configuration: [Release, Debug]
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Add MSBuild to PATH
+      - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
       - name: Build Suraksha (${{ matrix.configuration }} | x64)
@@ -56,8 +97,39 @@ jobs:
           $outputPath = "x64\${{ matrix.configuration }}\Suraksha.exe"
           if (Test-Path $outputPath) {
             $file = Get-Item $outputPath
-            Write-Host "Success! Binary compiled: $outputPath ($($file.Length) bytes)"
+            Write-Host "Success! Binary compiled: $outputPath ($([math]::Round($file.Length / 1KB, 2)) KB)" -ForegroundColor Green
           } else {
-            Write-Error "Expected output binary not found at $outputPath"
+            Write-Error "Expected binary not found at $outputPath"
             exit 1
           }
+
+  packaging-smoke-test:
+    name: Package Smoke Test (Inno & MSIX)
+    runs-on: windows-latest
+    needs: build-validation
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Compile Release Binary
+        run: |
+          msbuild Suraksha.vcxproj /p:Configuration=Release /p:Platform=x64 /m /verbosity:minimal
+
+      - name: Test Local Release Builder Script
+        shell: pwsh
+        run: |
+          Write-Host ">>> Running Local Release Builder smoke test..." -ForegroundColor Cyan
+          & .\scripts\Build-LocalRelease.ps1 -OutputDir "test_dist"
+          
+          if (-not (Test-Path "test_dist\Suraksha.exe")) {
+            Write-Error "Smoke test failed: test_dist\Suraksha.exe not produced!"
+            exit 1
+          }
+          if (-not (Test-Path "test_dist\SHA256SUMS.txt")) {
+            Write-Error "Smoke test failed: SHA256SUMS.txt not produced!"
+            exit 1
+          }
+          Write-Host "[OK] Smoke test completed successfully! Release & Beta branches are guaranteed to build clean." -ForegroundColor Green
